@@ -48,6 +48,22 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Artifacts
+
+### `artifacts/haproxy-analyzer` (`@workspace/haproxy-analyzer`)
+
+React + Vite frontend for the HAProxy Log Analyzer. Features:
+- Drag-and-drop log file upload
+- Dashboard with summary stats, traffic chart, backend table, server events, connections table
+- Live tail mode via SSE (EventSource → `/api/logs/stream?file=<path>`)
+- Export parsed data as JSON
+- Dark mode professional UI using Tailwind, Recharts, Framer Motion, Lucide
+
+Backend routes added to `artifacts/api-server`:
+- `POST /api/logs/parse` — accepts `{ content: string }`, returns `LogReport`
+- `GET /api/logs/stream` — SSE endpoint, tails a file by path, streams new lines every second
+- Parser: `artifacts/api-server/src/lib/haproxy-parser.ts`
+
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)

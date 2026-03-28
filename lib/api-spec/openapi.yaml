@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: HAProxy Log Analyzer API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: logs
+    description: Log parsing and analysis
 paths:
   /healthz:
     get:
@@ -24,6 +25,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /logs/parse:
+    post:
+      operationId: parseLogs
+      tags: [logs]
+      summary: Parse HAProxy log content
+      description: Accepts raw HAProxy log text and returns parsed statistics and entries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParseLogsRequest"
+      responses:
+        "200":
+          description: Parsed log statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogReport"
+  /logs/stream:
+    get:
+      operationId: streamLogs
+      tags: [logs]
+      summary: Stream live log updates via SSE
+      description: Server-Sent Events endpoint that tails a log file and streams new lines
+      parameters:
+        - in: query
+          name: file
+          schema:
+            type: string
+          description: Absolute path to the log file to tail
+        - in: query
+          name: since
+          schema:
+            type: integer
+          description: Byte offset to start reading from
+      responses:
+        "200":
+          description: SSE stream of log lines
+          content:
+            text/event-stream:
+              schema:
+                type: string
 components:
   schemas:
     HealthStatus:
@@ -33,4 +77,163 @@ components:
           type: string
       required:
         - status
-
+    ParseLogsRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          description: Raw HAProxy log file content
+      required:
+        - content
+    LogSummary:
+      type: object
+      properties:
+        totalConnections:
+          type: integer
+        totalBytes:
+          type: integer
+        serverEvents:
+          type: integer
+        downEvents:
+          type: integer
+        upEvents:
+          type: integer
+        uniqueClients:
+          type: integer
+        uniqueBackends:
+          type: integer
+        avgResponseTimeMs:
+          type: number
+        timeRange:
+          type: object
+          properties:
+            start:
+              type: string
+            end:
+              type: string
+          required: [start, end]
+      required:
+        - totalConnections
+        - totalBytes
+        - serverEvents
+        - downEvents
+        - upEvents
+        - uniqueClients
+        - uniqueBackends
+        - avgResponseTimeMs
+        - timeRange
+    ConnectionEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+        clientIp:
+          type: string
+        frontend:
+          type: string
+        backend:
+          type: string
+        server:
+          type: string
+        responseTimeMs:
+          type: integer
+        bytesTransferred:
+          type: integer
+        terminationState:
+          type: string
+        connStats:
+          type: string
+      required:
+        - timestamp
+        - clientIp
+        - frontend
+        - backend
+        - server
+        - responseTimeMs
+        - bytesTransferred
+        - terminationState
+        - connStats
+    ServerEvent:
+      type: object
+      properties:
+        timestamp:
+          type: string
+        backend:
+          type: string
+        server:
+          type: string
+        status:
+          type: string
+          enum: [UP, DOWN]
+        reason:
+          type: string
+        checkDurationMs:
+          type: integer
+      required:
+        - timestamp
+        - backend
+        - server
+        - status
+        - reason
+        - checkDurationMs
+    BackendStat:
+      type: object
+      properties:
+        name:
+          type: string
+        connections:
+          type: integer
+        totalBytes:
+          type: integer
+        avgResponseTimeMs:
+          type: number
+        servers:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - connections
+        - totalBytes
+        - avgResponseTimeMs
+        - servers
+    HourlyBucket:
+      type: object
+      properties:
+        hour:
+          type: string
+        connections:
+          type: integer
+        bytes:
+          type: integer
+      required:
+        - hour
+        - connections
+        - bytes
+    LogReport:
+      type: object
+      properties:
+        summary:
+          $ref: "#/components/schemas/LogSummary"
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectionEntry"
+        serverEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerEvent"
+        backendStats:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackendStat"
+        hourlyDistribution:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourlyBucket"
+      required:
+        - summary
+        - connections
+        - serverEvents
+        - backendStats
+        - hourlyDistribution

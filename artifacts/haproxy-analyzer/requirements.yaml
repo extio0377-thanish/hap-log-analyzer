@@ -1,0 +1,12 @@
+packages:
+  "recharts": "Data visualization for traffic charts"
+  "date-fns": "Date formatting for log timestamps"
+  "framer-motion": "Animations for slick dashboard updates and entry"
+  "lucide-react": "Icons for UI elements"
+  "clsx": "Utility for Tailwind class merging"
+  "tailwind-merge": "Utility for Tailwind class merging"
+
+notes:
+  - The API streams EventSource data for live tail. Assuming it sends JSON payloads.
+  - Using a highly customized dark theme optimized for data-dense log analysis.
+  - Overwriting index.css to enforce the strict dark mode professional aesthetic.
