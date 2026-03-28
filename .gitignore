@@ -47,3 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Sample/uploaded log files — do not commit real log data
+attached_assets/
+*.log
