@@ -58,9 +58,10 @@ export interface LogReport {
 }
 
 // HAProxy HTTP log format WITH request line (standard HTTP logging):
-// timestamp host haproxy[pid]: ip:port [date] frontend backend/server Tq/Tw/Tc/Tr/Ta STATUS BYTES term actconn/feconn/beconn/srv/ret q/q [{headers}] [{headers}] "METHOD URL HTTP/x.x"
+// timestamp host haproxy[pid]: ip:port [date] frontend backend/server Tq/Tw/Tc/Tr/Ta STATUS BYTES [cookie_req] [cookie_resp] term actconn/feconn/beconn/srv/ret q/q [{headers}] "METHOD URL HTTP/x.x"
+// Cookie fields (- -) are optional — 0, 1, or 2 single-dash captures may appear before the termination flags
 const HTTP_WITH_REQUEST_RE =
-  /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+([\d.:]+):\d+\s+\[[^\]]+\]\s+(\S+)\s+(\S+)\/(\S+)\s+\d+\/\d+\/\d+\/\d+\/(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\d+\/\d+\/\d+\/\d+\/\d+)\s+\d+\/\d+(?:\s+\{[^}]*\})*\s+"([A-Z]+)\s+(\S+)\s+HTTP\/[\d.]+"/;
+  /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+([\d.:]+):\d+\s+\[[^\]]+\]\s+(\S+)\s+(\S+)\/(\S+)\s+\d+\/\d+\/\d+\/\d+\/(\d+)\s+(\d+)\s+(\d+)(?:\s+-){0,2}\s+(\S+)\s+(\d+\/\d+\/\d+\/\d+\/\d+)\s+\d+\/\d+(?:\s+\{[^}]*\})*\s+"([A-Z]+)\s+(\S+)\s+HTTP\/[\d.]+"/;
 
 // HAProxy HTTP log format WITH captured body but WITHOUT request line (mTLS/SOAP APIs):
 // These entries have 2 extra cookie fields (- -) before termination flags, and large captured body blocks
@@ -76,47 +77,6 @@ const TCP_RE =
 const SERVER_EVENT_RE =
   /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+Server\s+(\S+)\/(\S+)\s+is\s+(UP|DOWN),\s+reason:\s+([^,]+),.*check duration:\s+(\d+)ms/;
 
-// Decode HAProxy's `#XX` hex encoding used in captured headers
-function decodeHaproxyCapture(s: string): string {
-  return s.replace(/#([0-9A-Fa-f]{2})/g, (_, hex) =>
-    String.fromCharCode(parseInt(hex, 16))
-  );
-}
-
-// Extract a useful URL/operation label from a captured request body
-function extractOperation(body: string): string {
-  const decoded = decodeHaproxyCapture(body.slice(0, 2000));
-
-  // SOAP XML: extract <OPERATION>...</OPERATION> and optionally <SERVICE>
-  const opMatch = decoded.match(/<OPERATION>([^<]+)<\/OPERATION>/);
-  const svcMatch = decoded.match(/<SERVICE>([^<]+)<\/SERVICE>/);
-  if (opMatch) {
-    return svcMatch ? `${svcMatch[1]}/${opMatch[1]}` : opMatch[1];
-  }
-
-  // JSON: look for common endpoint/action fields after decoding
-  try {
-    const jsonObj = JSON.parse(decoded);
-    const action =
-      jsonObj?.action ||
-      jsonObj?.operation ||
-      jsonObj?.endpoint ||
-      jsonObj?.type ||
-      jsonObj?.identifier?.xref ||
-      jsonObj?.content?.result;
-    if (action && typeof action === "string") return action;
-  } catch {
-    // not JSON or partial
-  }
-
-  // Fallback: grab first recognisable string identifier from body
-  const xrefMatch = decoded.match(/"xref"\s*:\s*"([^"]+)"/);
-  if (xrefMatch) return xrefMatch[1];
-
-  // Last resort: show beginning of body truncated
-  const preview = decoded.trim().slice(0, 60);
-  return preview || "—";
-}
 
 function tryParseConnection(line: string): ConnectionEntry | null {
   // 1. Try standard HTTP format with request line at end
@@ -143,7 +103,7 @@ function tryParseConnection(line: string): ConnectionEntry | null {
   // 2. Try mTLS/SOAP body-capture format (no request line, has captured body blocks)
   const bm = line.match(HTTP_BODY_CAPTURE_RE);
   if (bm) {
-    const [, timestamp, clientIp, frontend, backend, server, responseTotalMs, statusCode, bytes, terminationState, connStats, reqBody] = bm;
+    const [, timestamp, clientIp, frontend, backend, server, responseTotalMs, statusCode, bytes, terminationState, connStats] = bm;
     return {
       timestamp,
       clientIp,
@@ -156,7 +116,6 @@ function tryParseConnection(line: string): ConnectionEntry | null {
       connStats,
       isHttp: true,
       httpMethod: "POST",
-      httpUrl: extractOperation(reqBody),
       httpStatusCode: parseInt(statusCode, 10),
     };
   }

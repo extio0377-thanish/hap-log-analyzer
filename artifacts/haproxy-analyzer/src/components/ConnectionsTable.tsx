@@ -4,8 +4,6 @@ import { Search, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ConnectionEntry } from '@workspace/api-client-react';
 import { formatBytes, cn } from '@/lib/utils';
 
-const HTTP_FRONTEND_PATTERN = /LBS-2Way-UG-frontend/i;
-
 function StatusCodeBadge({ code }: { code?: number }) {
   if (!code) return <span className="text-muted-foreground font-mono">—</span>;
 
@@ -56,9 +54,8 @@ export function ConnectionsTable({ connections }: { connections: ConnectionEntry
   const [page, setPage] = useState(1);
   const rowsPerPage = 20;
 
-  // Filter to HTTP traffic only (frontend matches LBS-2Way-UG-frontend pattern)
   const httpConnections = useMemo(
-    () => connections.filter(c => c.isHttp && HTTP_FRONTEND_PATTERN.test(c.frontend)),
+    () => connections.filter(c => c.isHttp),
     [connections]
   );
 
@@ -88,7 +85,7 @@ export function ConnectionsTable({ connections }: { connections: ConnectionEntry
             HTTP Traffic Log
           </CardTitle>
           <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded font-mono">
-            LBS-2Way-UG-frontend · {httpConnections.length} requests
+            {httpConnections.length} requests
           </span>
         </div>
         <div className="relative w-full sm:w-80">
@@ -110,7 +107,7 @@ export function ConnectionsTable({ connections }: { connections: ConnectionEntry
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">Timestamp</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">Client IP</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">Method</th>
-              <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px]">Operation / URL</th>
+              <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px]">URL</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-center">Status</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-right">Duration</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-right">Bytes</th>
