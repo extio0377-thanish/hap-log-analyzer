@@ -8,6 +8,10 @@ export interface ConnectionEntry {
   bytesTransferred: number;
   terminationState: string;
   connStats: string;
+  isHttp: boolean;
+  httpMethod?: string;
+  httpUrl?: string;
+  httpStatusCode?: number;
 }
 
 export interface ServerEvent {
@@ -53,11 +57,62 @@ export interface LogReport {
   hourlyDistribution: HourlyBucket[];
 }
 
-const CONNECTION_RE =
-  /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+([\d.:]+):\d+\s+\[([^\]]+)\]\s+(\S+)\s+(\S+)\/(\S+)\s+[\d/]+\/[\d/]+([\d]+)\s+(\d+)\s+(\w+)\s+([\d/]+\/[\d/]+\/[\d/]+\/[\d/]+\/[\d/]+)\s+([\d/]+)/;
+// HAProxy HTTP log format:
+// timestamp host haproxy[pid]: client:port [date] frontend backend/server Tq/Tw/Tc/Tr/Ta STATUS_CODE BYTES flags actconn/feconn/beconn/srv/retries q/q [{req_headers}] [{resp_headers}] "METHOD URL HTTP/x.x"
+// The request line at the end distinguishes HTTP from TCP mode.
+const HTTP_RE =
+  /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+([\d.:]+):\d+\s+\[[^\]]+\]\s+(\S+)\s+(\S+)\/(\S+)\s+\d+\/\d+\/\d+\/\d+\/(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\d+\/\d+\/\d+\/\d+\/\d+)\s+\d+\/\d+(?:\s+\{[^}]*\})*\s+"([A-Z]+)\s+(\S+)\s+HTTP\/[\d.]+"/;
+
+// HAProxy TCP log format:
+// timestamp host haproxy[pid]: client:port [date] frontend backend/server Tc/Tw/Td BYTES flags actconn/feconn/beconn/srv/retries q/q
+const TCP_RE =
+  /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+([\d.:]+):\d+\s+\[[^\]]+\]\s+(\S+)\s+(\S+)\/(\S+)\s+\d+\/\d+\/(\d+)\s+(\d+)\s+(\S+)\s+(\d+\/\d+\/\d+\/\d+\/\d+)\s+\d+\/\d+/;
 
 const SERVER_EVENT_RE =
   /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+Server\s+(\S+)\/(\S+)\s+is\s+(UP|DOWN),\s+reason:\s+([^,]+),.*check duration:\s+(\d+)ms/;
+
+function tryParseConnection(line: string): ConnectionEntry | null {
+  // Try HTTP format first
+  const hm = line.match(HTTP_RE);
+  if (hm) {
+    const [, timestamp, clientIp, frontend, backend, server, responseTotalMs, statusCode, bytes, terminationState, connStats, method, url] = hm;
+    return {
+      timestamp,
+      clientIp,
+      frontend,
+      backend,
+      server,
+      responseTimeMs: parseInt(responseTotalMs, 10) || 0,
+      bytesTransferred: parseInt(bytes, 10) || 0,
+      terminationState,
+      connStats,
+      isHttp: true,
+      httpMethod: method,
+      httpUrl: url,
+      httpStatusCode: parseInt(statusCode, 10),
+    };
+  }
+
+  // Fall back to TCP format
+  const tm = line.match(TCP_RE);
+  if (tm) {
+    const [, timestamp, clientIp, frontend, backend, server, responseTimeMs, bytes, terminationState, connStats] = tm;
+    return {
+      timestamp,
+      clientIp,
+      frontend,
+      backend,
+      server,
+      responseTimeMs: parseInt(responseTimeMs, 10) || 0,
+      bytesTransferred: parseInt(bytes, 10) || 0,
+      terminationState,
+      connStats,
+      isHttp: false,
+    };
+  }
+
+  return null;
+}
 
 export function parseLogs(content: string): LogReport {
   const lines = content.split("\n");
@@ -85,43 +140,28 @@ export function parseLogs(content: string): LogReport {
       continue;
     }
 
-    const connMatch = line.match(CONNECTION_RE);
-    if (connMatch) {
-      const [, timestamp, clientIp, , frontend, backendServer, server, responseTimeMs, bytesStr, terminationState, connStats] = connMatch;
-      const bytes = parseInt(bytesStr, 10);
-      const ms = parseInt(responseTimeMs, 10);
-
-      const entry: ConnectionEntry = {
-        timestamp,
-        clientIp,
-        frontend,
-        backend: backendServer,
-        server,
-        responseTimeMs: ms,
-        bytesTransferred: bytes,
-        terminationState,
-        connStats,
-      };
+    const entry = tryParseConnection(line);
+    if (entry) {
       connections.push(entry);
-      clientSet.add(clientIp);
-      backendSet.add(backendServer);
+      clientSet.add(entry.clientIp);
+      backendSet.add(entry.backend);
 
-      if (!backendMap.has(backendServer)) {
-        backendMap.set(backendServer, { connections: 0, totalBytes: 0, totalMs: 0, servers: new Set() });
+      if (!backendMap.has(entry.backend)) {
+        backendMap.set(entry.backend, { connections: 0, totalBytes: 0, totalMs: 0, servers: new Set() });
       }
-      const bstat = backendMap.get(backendServer)!;
+      const bstat = backendMap.get(entry.backend)!;
       bstat.connections++;
-      bstat.totalBytes += bytes;
-      bstat.totalMs += ms;
-      bstat.servers.add(server);
+      bstat.totalBytes += entry.bytesTransferred;
+      bstat.totalMs += entry.responseTimeMs;
+      bstat.servers.add(entry.server);
 
-      const hourKey = timestamp.slice(0, 13);
+      const hourKey = entry.timestamp.slice(0, 13);
       if (!hourMap.has(hourKey)) {
         hourMap.set(hourKey, { connections: 0, bytes: 0 });
       }
       const hbucket = hourMap.get(hourKey)!;
       hbucket.connections++;
-      hbucket.bytes += bytes;
+      hbucket.bytes += entry.bytesTransferred;
     }
   }
 
@@ -183,22 +223,5 @@ export function parseLine(line: string): ConnectionEntry | ServerEvent | null {
       checkDurationMs: parseInt(checkDuration, 10),
     };
   }
-
-  const connMatch = line.match(CONNECTION_RE);
-  if (connMatch) {
-    const [, timestamp, clientIp, , frontend, backend, server, responseTimeMs, bytesStr, terminationState, connStats] = connMatch;
-    return {
-      timestamp,
-      clientIp,
-      frontend,
-      backend,
-      server,
-      responseTimeMs: parseInt(responseTimeMs, 10),
-      bytesTransferred: parseInt(bytesStr, 10),
-      terminationState,
-      connStats,
-    };
-  }
-
-  return null;
+  return tryParseConnection(line);
 }

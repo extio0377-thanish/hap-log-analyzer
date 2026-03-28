@@ -143,6 +143,18 @@ components:
           type: string
         connStats:
           type: string
+        httpMethod:
+          type: string
+          description: HTTP method (GET, POST, etc.) — only present for HTTP log entries
+        httpUrl:
+          type: string
+          description: HTTP request URL — only present for HTTP log entries
+        httpStatusCode:
+          type: integer
+          description: HTTP response status code — only present for HTTP log entries
+        isHttp:
+          type: boolean
+          description: True if this entry is an HTTP log entry
       required:
         - timestamp
         - clientIp
@@ -153,6 +165,7 @@ components:
         - bytesTransferred
         - terminationState
         - connStats
+        - isHttp
     ServerEvent:
       type: object
       properties:

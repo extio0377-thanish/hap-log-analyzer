@@ -49,6 +49,23 @@ export const ParseLogsResponse = zod.object({
       bytesTransferred: zod.number(),
       terminationState: zod.string(),
       connStats: zod.string(),
+      httpMethod: zod
+        .string()
+        .optional()
+        .describe(
+          "HTTP method (GET, POST, etc.) — only present for HTTP log entries",
+        ),
+      httpUrl: zod
+        .string()
+        .optional()
+        .describe("HTTP request URL — only present for HTTP log entries"),
+      httpStatusCode: zod
+        .number()
+        .optional()
+        .describe(
+          "HTTP response status code — only present for HTTP log entries",
+        ),
+      isHttp: zod.boolean().describe("True if this entry is an HTTP log entry"),
     }),
   ),
   serverEvents: zod.array(

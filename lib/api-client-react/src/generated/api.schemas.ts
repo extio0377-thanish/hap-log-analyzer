@@ -41,6 +41,14 @@ export interface ConnectionEntry {
   bytesTransferred: number;
   terminationState: string;
   connStats: string;
+  /** HTTP method (GET, POST, etc.) — only present for HTTP log entries */
+  httpMethod?: string;
+  /** HTTP request URL — only present for HTTP log entries */
+  httpUrl?: string;
+  /** HTTP response status code — only present for HTTP log entries */
+  httpStatusCode?: number;
+  /** True if this entry is an HTTP log entry */
+  isHttp: boolean;
 }
 
 export type ServerEventStatus =
