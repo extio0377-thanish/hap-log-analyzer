@@ -57,23 +57,70 @@ export interface LogReport {
   hourlyDistribution: HourlyBucket[];
 }
 
-// HAProxy HTTP log format:
-// timestamp host haproxy[pid]: client:port [date] frontend backend/server Tq/Tw/Tc/Tr/Ta STATUS_CODE BYTES flags actconn/feconn/beconn/srv/retries q/q [{req_headers}] [{resp_headers}] "METHOD URL HTTP/x.x"
-// The request line at the end distinguishes HTTP from TCP mode.
-const HTTP_RE =
+// HAProxy HTTP log format WITH request line (standard HTTP logging):
+// timestamp host haproxy[pid]: ip:port [date] frontend backend/server Tq/Tw/Tc/Tr/Ta STATUS BYTES term actconn/feconn/beconn/srv/ret q/q [{headers}] [{headers}] "METHOD URL HTTP/x.x"
+const HTTP_WITH_REQUEST_RE =
   /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+([\d.:]+):\d+\s+\[[^\]]+\]\s+(\S+)\s+(\S+)\/(\S+)\s+\d+\/\d+\/\d+\/\d+\/(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\d+\/\d+\/\d+\/\d+\/\d+)\s+\d+\/\d+(?:\s+\{[^}]*\})*\s+"([A-Z]+)\s+(\S+)\s+HTTP\/[\d.]+"/;
 
+// HAProxy HTTP log format WITH captured body but WITHOUT request line (mTLS/SOAP APIs):
+// These entries have 2 extra cookie fields (- -) before termination flags, and large captured body blocks
+// frontend~ (tilde = TLS frontend) backend/server Tq/Tw/Tc/Tr/Ta STATUS BYTES - - TERM actconn/... q/q {BODY} {CERT}
+const HTTP_BODY_CAPTURE_RE =
+  /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+([\d.:]+):\d+\s+\[[^\]]+\]\s+(\S+)\s+(\S+)\/(\S+)\s+\d+\/\d+\/\d+\/\d+\/(\d+)\s+(\d+)\s+(\d+)\s+-\s+-\s+(\S+)\s+(\d+\/\d+\/\d+\/\d+\/\d+)\s+\d+\/\d+\s+\{([^}]*)\}/;
+
 // HAProxy TCP log format:
-// timestamp host haproxy[pid]: client:port [date] frontend backend/server Tc/Tw/Td BYTES flags actconn/feconn/beconn/srv/retries q/q
+// timestamp host haproxy[pid]: ip:port [date] frontend backend/server Tc/Tw/Td BYTES flags actconn/feconn/beconn/srv/retries q/q
 const TCP_RE =
   /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+([\d.:]+):\d+\s+\[[^\]]+\]\s+(\S+)\s+(\S+)\/(\S+)\s+\d+\/\d+\/(\d+)\s+(\d+)\s+(\S+)\s+(\d+\/\d+\/\d+\/\d+\/\d+)\s+\d+\/\d+/;
 
 const SERVER_EVENT_RE =
   /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+Server\s+(\S+)\/(\S+)\s+is\s+(UP|DOWN),\s+reason:\s+([^,]+),.*check duration:\s+(\d+)ms/;
 
+// Decode HAProxy's `#XX` hex encoding used in captured headers
+function decodeHaproxyCapture(s: string): string {
+  return s.replace(/#([0-9A-Fa-f]{2})/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
+// Extract a useful URL/operation label from a captured request body
+function extractOperation(body: string): string {
+  const decoded = decodeHaproxyCapture(body.slice(0, 2000));
+
+  // SOAP XML: extract <OPERATION>...</OPERATION> and optionally <SERVICE>
+  const opMatch = decoded.match(/<OPERATION>([^<]+)<\/OPERATION>/);
+  const svcMatch = decoded.match(/<SERVICE>([^<]+)<\/SERVICE>/);
+  if (opMatch) {
+    return svcMatch ? `${svcMatch[1]}/${opMatch[1]}` : opMatch[1];
+  }
+
+  // JSON: look for common endpoint/action fields after decoding
+  try {
+    const jsonObj = JSON.parse(decoded);
+    const action =
+      jsonObj?.action ||
+      jsonObj?.operation ||
+      jsonObj?.endpoint ||
+      jsonObj?.type ||
+      jsonObj?.identifier?.xref ||
+      jsonObj?.content?.result;
+    if (action && typeof action === "string") return action;
+  } catch {
+    // not JSON or partial
+  }
+
+  // Fallback: grab first recognisable string identifier from body
+  const xrefMatch = decoded.match(/"xref"\s*:\s*"([^"]+)"/);
+  if (xrefMatch) return xrefMatch[1];
+
+  // Last resort: show beginning of body truncated
+  const preview = decoded.trim().slice(0, 60);
+  return preview || "—";
+}
+
 function tryParseConnection(line: string): ConnectionEntry | null {
-  // Try HTTP format first
-  const hm = line.match(HTTP_RE);
+  // 1. Try standard HTTP format with request line at end
+  const hm = line.match(HTTP_WITH_REQUEST_RE);
   if (hm) {
     const [, timestamp, clientIp, frontend, backend, server, responseTotalMs, statusCode, bytes, terminationState, connStats, method, url] = hm;
     return {
@@ -93,7 +140,28 @@ function tryParseConnection(line: string): ConnectionEntry | null {
     };
   }
 
-  // Fall back to TCP format
+  // 2. Try mTLS/SOAP body-capture format (no request line, has captured body blocks)
+  const bm = line.match(HTTP_BODY_CAPTURE_RE);
+  if (bm) {
+    const [, timestamp, clientIp, frontend, backend, server, responseTotalMs, statusCode, bytes, terminationState, connStats, reqBody] = bm;
+    return {
+      timestamp,
+      clientIp,
+      frontend,
+      backend,
+      server,
+      responseTimeMs: parseInt(responseTotalMs, 10) || 0,
+      bytesTransferred: parseInt(bytes, 10) || 0,
+      terminationState,
+      connStats,
+      isHttp: true,
+      httpMethod: "POST",
+      httpUrl: extractOperation(reqBody),
+      httpStatusCode: parseInt(statusCode, 10),
+    };
+  }
+
+  // 3. Fall back to TCP format
   const tm = line.match(TCP_RE);
   if (tm) {
     const [, timestamp, clientIp, frontend, backend, server, responseTimeMs, bytes, terminationState, connStats] = tm;

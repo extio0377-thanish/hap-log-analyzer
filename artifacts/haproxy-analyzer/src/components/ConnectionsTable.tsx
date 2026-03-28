@@ -110,7 +110,7 @@ export function ConnectionsTable({ connections }: { connections: ConnectionEntry
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">Timestamp</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">Client IP</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">Method</th>
-              <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px]">URL</th>
+              <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px]">Operation / URL</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-center">Status</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-right">Duration</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-right">Bytes</th>
@@ -149,7 +149,7 @@ export function ConnectionsTable({ connections }: { connections: ConnectionEntry
                 <td colSpan={7} className="px-6 py-16 text-center">
                   <p className="text-muted-foreground text-sm">
                     {httpConnections.length === 0
-                      ? 'No HTTP traffic found. HTTP entries require frontend name containing "LBS-2Way-UG-frontend" and a request line in the log.'
+                      ? 'No HTTP traffic found. Upload a log containing LBS-2Way-UG-frontend entries.'
                       : 'No entries match your search.'}
                   </p>
                 </td>
