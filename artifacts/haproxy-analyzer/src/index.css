@@ -24,13 +24,14 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* ─── Dark mode base (default) ─────────────────────────── */
 :root {
   color-scheme: dark;
   --background: 240 10% 4%;
@@ -39,31 +40,26 @@
   --card-foreground: 0 0% 98%;
   --popover: 240 10% 6%;
   --popover-foreground: 0 0% 98%;
-  
-  /* Cyan primary for that "hacker/sysadmin" premium feel */
-  --primary: 184 100% 40%;
-  --primary-foreground: 240 10% 4%;
-  
+
+  /* Default: Red accent */
+  --primary: 0 72% 51%;
+  --primary-foreground: 0 0% 100%;
+
   --secondary: 240 10% 12%;
   --secondary-foreground: 0 0% 98%;
-  
   --muted: 240 10% 10%;
   --muted-foreground: 240 5% 65%;
-  
   --accent: 240 10% 14%;
   --accent-foreground: 0 0% 98%;
-  
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
-  
   --border: 240 10% 14%;
   --input: 240 10% 14%;
-  --ring: 184 100% 40%;
-  
+  --ring: 0 72% 51%;
   --radius: 0.75rem;
 }
 
-/* Light theme overrides — applied when <html class="light"> */
+/* ─── Light mode ────────────────────────────────────────── */
 html.light {
   color-scheme: light;
   --background: 210 20% 97%;
@@ -72,8 +68,8 @@ html.light {
   --card-foreground: 240 10% 8%;
   --popover: 0 0% 100%;
   --popover-foreground: 240 10% 8%;
-  --primary: 184 100% 30%;
-  --primary-foreground: 0 0% 98%;
+  --primary: 0 72% 44%;
+  --primary-foreground: 0 0% 100%;
   --secondary: 210 15% 90%;
   --secondary-foreground: 240 10% 8%;
   --muted: 210 15% 92%;
@@ -84,14 +80,41 @@ html.light {
   --destructive-foreground: 0 0% 98%;
   --border: 210 15% 84%;
   --input: 210 15% 84%;
-  --ring: 184 100% 30%;
+  --ring: 0 72% 44%;
 }
 
+/* ─── Color Theme Overrides ─────────────────────────────── */
+
+/* Red (explicit class, same as default) */
+html.theme-red              { --primary: 0 72% 51%; --ring: 0 72% 51%; }
+html.light.theme-red        { --primary: 0 72% 41%; --ring: 0 72% 41%; }
+
+/* Blue */
+html.theme-blue             { --primary: 217 91% 60%; --ring: 217 91% 60%; }
+html.light.theme-blue       { --primary: 217 91% 50%; --ring: 217 91% 50%; }
+
+/* Green */
+html.theme-green            { --primary: 142 71% 45%; --ring: 142 71% 45%; }
+html.light.theme-green      { --primary: 142 71% 35%; --ring: 142 71% 35%; }
+
+/* Orange */
+html.theme-orange           { --primary: 25 95% 53%; --ring: 25 95% 53%; }
+html.light.theme-orange     { --primary: 25 95% 43%; --ring: 25 95% 43%; }
+
+/* Pink */
+html.theme-pink             { --primary: 330 81% 60%; --ring: 330 81% 60%; }
+html.light.theme-pink       { --primary: 330 81% 50%; --ring: 330 81% 50%; }
+
+/* Classic Cyan (original "default") */
+html.theme-default          { --primary: 184 100% 40%; --ring: 184 100% 40%; }
+html.light.theme-default    { --primary: 184 100% 30%; --ring: 184 100% 30%; }
+
+/* ─── Base Layer ────────────────────────────────────────── */
 @layer base {
   * {
     @apply border-border;
   }
-  
+
   body {
     @apply bg-background text-foreground antialiased font-sans;
     background-image: radial-gradient(circle at 50% 0%, hsl(240 10% 10%) 0%, hsl(240 10% 4%) 100%);
@@ -108,18 +131,8 @@ html.light {
   }
 }
 
-/* Custom Scrollbar for inner elements */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
-}
+/* ─── Custom Scrollbar ──────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }

@@ -69,7 +69,9 @@ export function useLogState() {
       eventSourceRef.current.close();
     }
 
-    const url = `/api/logs/stream?file=${encodeURIComponent(path)}`;
+    const token = (() => { try { return localStorage.getItem('msb-token') ?? ''; } catch { return ''; } })();
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    const url = `${base}/api/logs/stream?file=${encodeURIComponent(path)}&token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
 

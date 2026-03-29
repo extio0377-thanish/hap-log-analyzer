@@ -11,102 +11,96 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+- **Auth**: JWT (jsonwebtoken) + bcryptjs; token stored in localStorage; query-param fallback for SSE
+- **Database**: SQLite (better-sqlite3) for user/auth data; schema seeded on startup
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Build**: esbuild
 
 ## Structure
 
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   └── haproxy-analyzer/   # React + Vite frontend
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
+│   ├── api-client-react/   # Generated React Query hooks + customFetch (supports setAuthTokenGetter)
 │   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+│   └── db/                 # Drizzle ORM schema + DB connection (PostgreSQL)
+├── scripts/                # Utility scripts
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── tsconfig.json
+└── package.json            # Root: pnpm.onlyBuiltDependencies: ["better-sqlite3"]
 ```
 
-## TypeScript & Composite Projects
+## Auth System
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+- SQLite database at `artifacts/api-server/msb.db` (auto-created on startup)
+- Default admin: `admin@msb.local` / `Admin@123!`
+- Roles: Admin (all perms), Viewer (view_dashboard), Operator (view_dashboard)
+- Permissions: `view_dashboard`, `manage_users`, `manage_roles`, `manage_policy`
+- JWT tokens expire in 24h; `requireAuth` middleware checks Bearer header OR `?token=` query param
+- Password policy enforced server-side + client-side strength meter
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+## Frontend Routes
 
-## Root Scripts
+- `/` — Dashboard (protected)
+- `/login` — Login page (public)
+- `/users` — User & Role management (requires `manage_users`)
+- `/password-policy` — Password policy settings (requires `manage_policy`)
+- `/profile` — User profile, password change, color theme picker
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+## Color Themes
+
+CSS custom property `--primary` overridden via `html.theme-<name>` class:
+- `red` (default), `blue`, `green`, `orange`, `pink`, `default` (classic cyan)
+- Dark/light mode independent of color theme
+- User preference stored in `localStorage` as `msb-color-theme` and synced to DB via `PUT /api/profile/theme`
 
 ## Artifacts
 
 ### `artifacts/haproxy-analyzer` (`@workspace/haproxy-analyzer`)
 
-React + Vite frontend for the HAProxy Log Analyzer. Features:
-- Drag-and-drop log file upload
-- Dashboard with summary stats, traffic chart, backend table, server events, connections table
-- Live tail mode via SSE (EventSource → `/api/logs/stream?file=<path>`)
-- Export parsed data as JSON
-- Dark mode professional UI using Tailwind, Recharts, Framer Motion, Lucide
-
-Backend routes added to `artifacts/api-server`:
-- `POST /api/logs/parse` — accepts `{ content: string }`, returns `LogReport`
-- `GET /api/logs/stream` — SSE endpoint, tails a file by path, streams new lines every second
-- Parser: `artifacts/api-server/src/lib/haproxy-parser.ts`
-
-## Packages
+React + Vite frontend. Features:
+- Login gate with protected routes (wouter)
+- Layout with top nav (Dashboard, Users & Roles, Password Policy) + user menu (Profile, Logout)
+- Drag-and-drop log file upload; dashboard with summary stats, traffic chart, backend table, server events, connections table
+- Live tail mode via SSE (`EventSource` with `?token=` query param)
+- Color theme picker (Red/Blue/Green/Orange/Pink/Default) per user profile
+- "Thinking..." spinner on all loading states
+- Screenshot capture → download JPG + POST to `/api/screenshot`
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+Express 5 API. All routes under `/api/`. Auth via `requireAuth` middleware (applied after `/api/auth/login`).
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+Key routes:
+- `POST /api/auth/login` — returns JWT + user profile
+- `GET /api/auth/me` — returns current user (protected)
+- `GET|POST|PUT|DELETE /api/users` — user CRUD (requires `manage_users`)
+- `GET|POST|PUT|DELETE /api/roles` — role CRUD (requires `manage_roles`)
+- `GET /api/roles/permissions` — list all permissions
+- `GET|PUT /api/password-policy` — password policy (PUT requires `manage_policy`)
+- `GET|PUT /api/profile` — own profile update (protected)
+- `PUT /api/profile/password` — change own password (enforces policy)
+- `PUT /api/profile/theme` — update color theme, returns new JWT
+- `POST /api/logs/parse` — parse log content
+- `GET /api/logs/stream` — SSE live tail
+- `GET|POST /api/screenshot` — screenshot store
 
-### `lib/db` (`@workspace/db`)
+Key lib files:
+- `src/lib/db.ts` — SQLite setup, schema creation, seed data
+- `src/lib/auth-middleware.ts` — JWT middleware, createToken, requirePermission
+- `src/lib/password-validator.ts` — validatePassword(password, policy)
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+## TypeScript & Composite Projects
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
+Every package extends `tsconfig.base.json` which sets `composite: true`. Run `pnpm run typecheck` from root.
 
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+## Root Scripts
 
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+- `pnpm run build` — typecheck + recursive build
+- `pnpm run typecheck` — `tsc --build --emitDeclarationOnly`

@@ -9,6 +9,8 @@ import { ConnectionsTable } from './ConnectionsTable';
 import type { LogReport } from '@workspace/api-client-react';
 import { formatBytes } from '@/lib/utils';
 import { useTheme } from '@/lib/theme-context';
+import { InlineSpinner } from './Spinner';
+import { apiRequest } from '@/lib/api-client';
 
 interface DashboardViewProps {
   report: LogReport;
@@ -61,9 +63,8 @@ export function DashboardView({
 
       // Upload to API so GET /api/screenshot can serve it
       try {
-        await fetch('/api/screenshot', {
+        await apiRequest('/screenshot', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: dataUrl }),
         });
       } catch (err) {
@@ -116,8 +117,7 @@ export function DashboardView({
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-wait"
             title="Capture dashboard screenshot (downloads as JPG + posts to GET /api/screenshot)"
           >
-            <Camera className={`w-4 h-4 ${screenshotting ? 'animate-pulse text-primary' : ''}`} />
-            {screenshotting ? 'Capturing…' : 'Screenshot'}
+            {screenshotting ? <InlineSpinner text="Thinking..." /> : <><Camera className="w-4 h-4" /> Screenshot</>}
           </button>
 
           {/* Auto Refresh toggle */}

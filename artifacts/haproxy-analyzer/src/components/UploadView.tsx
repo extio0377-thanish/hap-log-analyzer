@@ -4,6 +4,7 @@ import { Activity, UploadCloud, Terminal, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from './ui/card';
 import { useTheme } from '@/lib/theme-context';
+import { InlineSpinner } from './Spinner';
 
 interface UploadViewProps {
   onUpload: (file: File) => void;
@@ -92,7 +93,7 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
               disabled={isParsing}
               className="bg-primary text-primary-foreground px-6 py-2.5 rounded-lg font-medium cursor-pointer hover:bg-primary/90 transition-all hover:shadow-[0_0_20px_hsl(var(--primary)/0.3)] hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
             >
-              {isParsing ? "Analyzing..." : "Browse Files"}
+              {isParsing ? <InlineSpinner text="Thinking..." /> : "Browse Files"}
             </button>
           </div>
 
