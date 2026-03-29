@@ -135,6 +135,7 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">
                 <span className="flex items-center gap-1"><Key className="w-3 h-3" />X-API-Key</span>
               </th>
+              <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">SSL-CN</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-right">Duration</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-right">Bytes</th>
             </tr>
@@ -169,6 +170,18 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
                     <span className="text-muted-foreground">—</span>
                   )}
                 </td>
+                <td className="px-4 py-2.5 whitespace-nowrap max-w-[140px]">
+                  {conn.sslCn ? (
+                    <span
+                      className="text-emerald-400/80 font-mono text-[10px] truncate block"
+                      title={conn.sslCn}
+                    >
+                      {conn.sslCn}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-2.5 text-right font-mono whitespace-nowrap text-muted-foreground">
                   {conn.responseTimeMs >= 1000
                     ? `${(conn.responseTimeMs / 1000).toFixed(1)}s`
@@ -181,7 +194,7 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
             ))}
             {paginated.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-16 text-center">
+                <td colSpan={9} className="px-6 py-16 text-center">
                   <p className="text-muted-foreground text-sm">
                     {httpConnections.length === 0
                       ? 'No HTTP traffic found in the current log.'

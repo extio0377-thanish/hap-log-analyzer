@@ -51,6 +51,8 @@ export interface ConnectionEntry {
   isHttp: boolean;
   /** API key extracted from X-API-Key header (MSB JSON log format) */
   apiKey?: string;
+  /** Common Name extracted from ssl_subject (MSB JSON log format) */
+  sslCn?: string;
 }
 
 export type ServerEventStatus =

@@ -13,6 +13,7 @@ export interface ConnectionEntry {
   httpUrl?: string;
   httpStatusCode?: number;
   apiKey?: string;
+  sslCn?: string;
 }
 
 export interface ServerEvent {
@@ -96,19 +97,39 @@ function tryParseJsonLine(line: string): ConnectionEntry | null {
   const method    = field('method', 'Method') ?? 'POST';
   const uri       = field('uri', 'url', 'URI') ?? '/';
   const apiKey    = field('X-API-Key', 'x-api-key', 'apikey');
+  const sslSubject = field('ssl_subject', 'ssl_cn_subject');
 
-  // Extract status code directly from the raw line — works even when JSON is malformed.
-  // Covers both XML (<responseCode>401</responseCode>) and plain JSON status fields.
-  let statusCode: number | undefined;
-  const xmlMatch = line.match(/<responseCode>(\d{3})<\/responseCode>/);
-  if (xmlMatch) {
-    statusCode = parseInt(xmlMatch[1], 10);
-  } else {
-    const jsonMatch = line.match(/"(?:status|responseCode|statusCode|httpCode)"\s*:\s*(\d{3})/);
-    if (jsonMatch) statusCode = parseInt(jsonMatch[1], 10);
+  // Extract CN from ssl_subject (e.g. "/C=IN/.../CN=srv-stage-lbr/emailAddress=...")
+  let sslCn: string | undefined;
+  if (sslSubject && sslSubject !== '-') {
+    const cnMatch = sslSubject.match(/\/CN=([^\/]+)/);
+    if (cnMatch) sslCn = cnMatch[1].trim();
   }
 
-  const uriSegment = (uri.startsWith('/') ? uri.slice(1) : uri).split('/')[0] || 'MSB-API';
+  // Extract status code.
+  // Priority 1: direct "status" field (new format — string value like "500")
+  // Priority 2: XML <responseCode>NNN</responseCode> in response body
+  // Priority 3: JSON "responseCode"/"statusCode" numeric field
+  // The regex uses "? to handle both quoted-string and numeric JSON values.
+  let statusCode: number | undefined;
+  const statusField = field('status');
+  if (statusField && /^\d{3}$/.test(statusField)) {
+    statusCode = parseInt(statusField, 10);
+  } else {
+    const xmlMatch = line.match(/<responseCode>(\d{3})<\/responseCode>/);
+    if (xmlMatch) {
+      statusCode = parseInt(xmlMatch[1], 10);
+    } else {
+      // matches both "responseCode":404 (number) and "responseCode":"404" (string)
+      const jsonMatch = line.match(/"(?:responseCode|statusCode|httpCode)"\s*:\s*"?(\d{3})"?/);
+      if (jsonMatch) statusCode = parseInt(jsonMatch[1], 10);
+    }
+  }
+
+  // Derive backend from the URI path (handles both plain paths and full URLs)
+  let uriPath = uri;
+  try { uriPath = new URL(uri).pathname; } catch { /* uri is already a path */ }
+  const uriSegment = (uriPath.startsWith('/') ? uriPath.slice(1) : uriPath).split('/')[0] || 'MSB-API';
 
   return {
     timestamp: outerTimestamp,
@@ -125,6 +146,7 @@ function tryParseJsonLine(line: string): ConnectionEntry | null {
     httpUrl: uri,
     httpStatusCode: statusCode,
     apiKey,
+    sslCn,
   };
 }
 
