@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Activity, UploadCloud, Terminal } from 'lucide-react';
+import { Activity, UploadCloud, Terminal, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from './ui/card';
+import { useTheme } from '@/lib/theme-context';
 
 interface UploadViewProps {
   onUpload: (file: File) => void;
@@ -14,6 +15,7 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
   const [dragging, setDragging] = useState(false);
   const [path, setPath] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { theme, toggleTheme } = useTheme();
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -38,6 +40,18 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
 
   return (
     <div className="w-full max-w-3xl mx-auto mt-20">
+      {/* Theme toggle in top-right */}
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={toggleTheme}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-sm font-medium"
+          title={theme === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode'}
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {theme === 'dark' ? 'Light' : 'Dark'}
+        </button>
+      </div>
+
       <motion.div 
         initial={{ opacity: 0, y: 20 }} 
         animate={{ opacity: 1, y: 0 }} 
@@ -47,7 +61,7 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 text-primary mb-6 shadow-[0_0_30px_hsl(var(--primary)/0.2)]">
           <Terminal className="w-8 h-8" />
         </div>
-        <h1 className="text-4xl font-bold text-foreground mb-4">HAProxy Log Analyzer</h1>
+        <h1 className="text-4xl font-bold text-foreground mb-4">MSB Traffic Visualizer</h1>
         <p className="text-lg text-muted-foreground">Drop a log file to parse instantly, or connect to a live stream.</p>
       </motion.div>
 
@@ -64,7 +78,7 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
             )}
           >
             <UploadCloud className={cn("w-12 h-12 mx-auto mb-4 transition-colors duration-300", dragging ? "text-primary" : "text-muted-foreground group-hover:text-primary/70")} />
-            <h3 className="text-xl font-medium mb-2 text-foreground">Upload HAProxy Log</h3>
+            <h3 className="text-xl font-medium mb-2 text-foreground">Upload MSB Log</h3>
             <p className="text-muted-foreground mb-6 text-sm">Drag and drop your .log file here</p>
             <input 
               type="file" 

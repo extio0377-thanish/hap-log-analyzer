@@ -63,6 +63,30 @@
   --radius: 0.75rem;
 }
 
+/* Light theme overrides — applied when <html class="light"> */
+html.light {
+  color-scheme: light;
+  --background: 210 20% 97%;
+  --foreground: 240 10% 8%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 8%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 8%;
+  --primary: 184 100% 30%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 210 15% 90%;
+  --secondary-foreground: 240 10% 8%;
+  --muted: 210 15% 92%;
+  --muted-foreground: 240 5% 45%;
+  --accent: 210 15% 88%;
+  --accent-foreground: 240 10% 8%;
+  --destructive: 0 84% 55%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 210 15% 84%;
+  --input: 210 15% 84%;
+  --ring: 184 100% 30%;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -73,6 +97,10 @@
     background-image: radial-gradient(circle at 50% 0%, hsl(240 10% 10%) 0%, hsl(240 10% 4%) 100%);
     background-attachment: fixed;
     min-height: 100vh;
+  }
+
+  html.light body {
+    background-image: radial-gradient(circle at 50% 0%, hsl(210 20% 93%) 0%, hsl(210 20% 97%) 100%);
   }
 
   h1, h2, h3, h4, h5, h6 {

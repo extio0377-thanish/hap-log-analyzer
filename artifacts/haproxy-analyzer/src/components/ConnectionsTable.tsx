@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Search, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, List, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import type { ConnectionEntry } from '@workspace/api-client-react';
 import { formatBytes, cn } from '@/lib/utils';
 
@@ -8,7 +8,7 @@ function StatusCodeBadge({ code }: { code?: number }) {
   if (!code) return <span className="text-muted-foreground font-mono">—</span>;
 
   let colorClass = '';
-  let label = String(code);
+  const label = String(code);
 
   if (code >= 200 && code < 300) {
     colorClass = 'bg-green-500/15 text-green-400 border border-green-500/30';
@@ -49,9 +49,15 @@ function MethodBadge({ method }: { method?: string }) {
   );
 }
 
-export function ConnectionsTable({ connections }: { connections: ConnectionEntry[] }) {
+interface ConnectionsTableProps {
+  connections: ConnectionEntry[];
+  onRefresh: () => void;
+}
+
+export function ConnectionsTable({ connections, onRefresh }: ConnectionsTableProps) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [refreshing, setRefreshing] = useState(false);
   const rowsPerPage = 20;
 
   const httpConnections = useMemo(
@@ -76,17 +82,33 @@ export function ConnectionsTable({ connections }: { connections: ConnectionEntry
   const start = (page - 1) * rowsPerPage + (filtered.length > 0 ? 1 : 0);
   const end = Math.min(page * rowsPerPage, filtered.length);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await onRefresh();
+    setPage(1);
+    setTimeout(() => setRefreshing(false), 600);
+  };
+
   return (
     <Card>
       <CardHeader className="pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50">
         <div className="flex items-center gap-3">
           <CardTitle className="flex items-center gap-2">
             <List className="w-5 h-5 text-primary" />
-            HTTP Traffic Log
+            Live Traffic
           </CardTitle>
           <span className="text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded font-mono">
             {httpConnections.length} requests
           </span>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-xs font-medium disabled:opacity-50"
+            title="Refresh table"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -146,7 +168,7 @@ export function ConnectionsTable({ connections }: { connections: ConnectionEntry
                 <td colSpan={7} className="px-6 py-16 text-center">
                   <p className="text-muted-foreground text-sm">
                     {httpConnections.length === 0
-                      ? 'No HTTP traffic found. Upload a log containing LBS-2Way-UG-frontend entries.'
+                      ? 'No HTTP traffic found in the current log.'
                       : 'No entries match your search.'}
                   </p>
                 </td>
@@ -161,7 +183,7 @@ export function ConnectionsTable({ connections }: { connections: ConnectionEntry
             Showing{' '}
             <span className="font-medium text-foreground">{start}</span> to{' '}
             <span className="font-medium text-foreground">{end}</span> of{' '}
-            <span className="font-medium text-foreground">{filtered.length}</span> HTTP requests
+            <span className="font-medium text-foreground">{filtered.length}</span> requests
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Page {page} / {totalPages}</span>

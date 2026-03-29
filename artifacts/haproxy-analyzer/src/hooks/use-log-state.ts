@@ -7,15 +7,40 @@ export function useLogState() {
   const [report, setReport] = useState<LogReport | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [livePath, setLivePath] = useState('');
+  const [autoRefresh, setAutoRefreshState] = useState(true);
+  const autoRefreshRef = useRef(true);
   const eventSourceRef = useRef<EventSource | null>(null);
   const accumulatedLinesRef = useRef<string[]>([]);
   const { toast } = useToast();
 
   const { mutateAsync: parseLogFile, isPending: isParsing } = useParseLogs();
 
+  const setAutoRefresh = useCallback((value: boolean) => {
+    autoRefreshRef.current = value;
+    setAutoRefreshState(value);
+  }, []);
+
+  const toggleAutoRefresh = useCallback(() => {
+    const next = !autoRefreshRef.current;
+    autoRefreshRef.current = next;
+    setAutoRefreshState(next);
+  }, []);
+
+  const manualRefresh = useCallback(async () => {
+    const content = accumulatedLinesRef.current.join('\n');
+    if (!content.trim()) return;
+    try {
+      const result = await parseLogFile({ data: { content } });
+      setReport(result);
+    } catch (err) {
+      console.error('Manual refresh failed', err);
+    }
+  }, [parseLogFile]);
+
   const handleFileUpload = async (file: File) => {
     try {
       const text = await file.text();
+      accumulatedLinesRef.current = text.split('\n');
       const result = await parseLogFile({ data: { content: text } });
       setReport(result);
       setIsLive(false);
@@ -27,7 +52,7 @@ export function useLogState() {
       console.error(error);
       toast({
         title: 'Failed to parse log',
-        description: 'Ensure the file is a valid HAProxy log format.',
+        description: 'Ensure the file is a valid MSB log format.',
         variant: 'destructive',
       });
     }
@@ -51,6 +76,7 @@ export function useLogState() {
     let parseDebounce: ReturnType<typeof setTimeout> | null = null;
 
     const triggerParse = () => {
+      if (!autoRefreshRef.current) return;
       if (parseDebounce) clearTimeout(parseDebounce);
       parseDebounce = setTimeout(async () => {
         const content = accumulatedLinesRef.current.join('\n');
@@ -116,9 +142,13 @@ export function useLogState() {
     isLive,
     livePath,
     isParsing,
+    autoRefresh,
     handleFileUpload,
     startLiveTail,
     stopLiveTail,
     clearData,
+    toggleAutoRefresh,
+    setAutoRefresh,
+    manualRefresh,
   };
 }

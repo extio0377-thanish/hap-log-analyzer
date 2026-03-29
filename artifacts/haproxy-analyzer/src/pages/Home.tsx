@@ -9,10 +9,13 @@ export default function Home() {
     isLive, 
     livePath, 
     isParsing, 
+    autoRefresh,
     handleFileUpload, 
     startLiveTail, 
     stopLiveTail, 
-    clearData 
+    clearData,
+    toggleAutoRefresh,
+    manualRefresh,
   } = useLogState();
 
   return (
@@ -23,7 +26,10 @@ export default function Home() {
           isLive={isLive} 
           livePath={livePath} 
           onClear={clearData} 
-          onStopLive={stopLiveTail} 
+          onStopLive={stopLiveTail}
+          autoRefresh={autoRefresh}
+          onToggleAutoRefresh={toggleAutoRefresh}
+          onManualRefresh={manualRefresh}
         />
       ) : (
         <UploadView 
