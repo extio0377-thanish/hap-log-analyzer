@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, Cell,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Activity } from 'lucide-react';
@@ -25,6 +25,8 @@ const STATUS_LABELS: Record<StatusKey, string> = {
   other: 'Other',
 };
 
+const ALL_KEYS: StatusKey[] = ['s2xx', 's3xx', 's4xx', 's5xx', 'other'];
+
 interface StatusBucket {
   time: string;
   s2xx: number;
@@ -35,11 +37,11 @@ interface StatusBucket {
 }
 
 function classify(code?: number): StatusKey {
-  if (!code)              return 'other';
-  if (code < 300)         return 's2xx';
-  if (code < 400)         return 's3xx';
-  if (code < 500)         return 's4xx';
-  if (code < 600)         return 's5xx';
+  if (!code)        return 'other';
+  if (code < 300)   return 's2xx';
+  if (code < 400)   return 's3xx';
+  if (code < 500)   return 's4xx';
+  if (code < 600)   return 's5xx';
   return 'other';
 }
 
@@ -60,35 +62,32 @@ function buildBuckets(connections: ConnectionEntry[]): StatusBucket[] {
     if (!map.has(timeKey)) {
       map.set(timeKey, { time: timeKey, s2xx: 0, s3xx: 0, s4xx: 0, s5xx: 0, other: 0 });
     }
-    const bucket = map.get(timeKey)!;
-    bucket[classify(c.httpStatusCode)]++;
+    map.get(timeKey)![classify(c.httpStatusCode)]++;
   }
 
   return Array.from(map.values()).sort((a, b) => a.time.localeCompare(b.time));
 }
 
-const BARS: StatusKey[] = ['s2xx', 's3xx', 's4xx', 's5xx', 'other'];
-
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; fill: string }>;
+  payload?: Array<{ name: string; value: number; color: string }>;
   label?: string;
 }
 
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
-  const entries = payload.filter(p => p.value > 0);
+  const entries = payload.filter(p => p.value > 0).sort((a, b) => b.value - a.value);
   if (entries.length === 0) return null;
   return (
-    <div className="bg-card border border-border rounded-lg shadow-lg p-3 text-sm min-w-[160px]">
-      <p className="text-muted-foreground text-xs font-mono mb-2">{label}</p>
+    <div className="bg-card border border-border rounded-lg shadow-xl p-3 text-sm min-w-[180px]">
+      <p className="text-muted-foreground text-xs font-mono mb-2 border-b border-border pb-1.5">{label}</p>
       {entries.map(e => (
-        <div key={e.name} className="flex items-center justify-between gap-4 py-0.5">
+        <div key={e.name} className="flex items-center justify-between gap-6 py-0.5">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-full" style={{ background: e.fill }} />
-            <span className="text-foreground">{STATUS_LABELS[e.name as StatusKey] ?? e.name}</span>
+            <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: e.color }} />
+            <span className="text-foreground/90">{STATUS_LABELS[e.name as StatusKey] ?? e.name}</span>
           </span>
-          <span className="font-bold text-foreground tabular-nums">{e.value}</span>
+          <span className="font-bold tabular-nums" style={{ color: e.color }}>{e.value}</span>
         </div>
       ))}
     </div>
@@ -98,9 +97,14 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 export function TrafficChart({ connections }: { connections: ConnectionEntry[] }) {
   const data = useMemo(() => buildBuckets(connections), [connections]);
 
-  const activeBars = useMemo(
-    () => BARS.filter(k => data.some(d => d[k] > 0)),
+  const activeKeys = useMemo(
+    () => ALL_KEYS.filter(k => data.some(d => d[k] > 0)),
     [data],
+  );
+
+  const total = useMemo(
+    () => connections.filter(c => c.isJsonLog).length,
+    [connections],
   );
 
   if (data.length === 0) {
@@ -112,7 +116,8 @@ export function TrafficChart({ connections }: { connections: ConnectionEntry[] }
             HTTP Status Over Time
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        <CardContent className="flex-1 flex flex-col items-center justify-center gap-2 text-muted-foreground text-sm">
+          <Activity className="w-8 h-8 opacity-20" />
           No traffic data yet
         </CardContent>
       </Card>
@@ -121,19 +126,29 @@ export function TrafficChart({ connections }: { connections: ConnectionEntry[] }
 
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-1">
         <CardTitle className="flex items-center gap-2 text-base">
           <Activity className="w-4 h-4 text-primary" />
           HTTP Status Over Time
           <span className="ml-auto text-xs font-normal text-muted-foreground tabular-nums">
-            {connections.filter(c => c.isJsonLog).length} requests
+            {total.toLocaleString()} requests
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 min-h-[280px] pt-2">
+      <CardContent className="flex-1 min-h-[280px] pt-1">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 4, right: 4, left: -18, bottom: 0 }} barCategoryGap="30%">
+          <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+            <defs>
+              {ALL_KEYS.map(key => (
+                <linearGradient key={key} id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={STATUS_COLORS[key]} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={STATUS_COLORS[key]} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+
             <XAxis
               dataKey="time"
               stroke="hsl(var(--muted-foreground))"
@@ -147,29 +162,41 @@ export function TrafficChart({ connections }: { connections: ConnectionEntry[] }
               tickLine={false}
               axisLine={false}
               allowDecimals={false}
+              width={36}
               tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--accent) / 0.25)' }} />
+
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1, strokeDasharray: '4 2' }}
+            />
+
             <Legend
-              wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }}
+              wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }}
               formatter={value => (
-                <span style={{ color: 'hsl(var(--foreground))', opacity: 0.8 }}>
+                <span style={{ color: STATUS_COLORS[value as StatusKey] ?? 'hsl(var(--foreground))', fontWeight: 600 }}>
                   {STATUS_LABELS[value as StatusKey] ?? value}
                 </span>
               )}
             />
-            {activeBars.map((key, i) => (
-              <Bar
+
+            {activeKeys.map(key => (
+              <Area
                 key={key}
+                type="monotone"
                 dataKey={key}
                 name={key}
-                stackId="stack"
-                fill={STATUS_COLORS[key]}
-                isAnimationActive={false}
-                radius={i === activeBars.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                stroke={STATUS_COLORS[key]}
+                strokeWidth={2.5}
+                fill={`url(#grad-${key})`}
+                fillOpacity={1}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--card))', fill: STATUS_COLORS[key] }}
+                animationDuration={400}
+                animationEasing="ease-out"
               />
             ))}
-          </BarChart>
+          </AreaChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>
