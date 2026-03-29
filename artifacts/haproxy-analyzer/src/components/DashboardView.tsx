@@ -42,17 +42,15 @@ export function DashboardView({
     if (!dashboardRef.current || screenshotting) return;
     setScreenshotting(true);
     try {
-      const html2canvas = (await import('html2canvas')).default;
+      const { toJpeg } = await import('html-to-image');
       const isLight = document.documentElement.classList.contains('light');
-      const canvas = await html2canvas(dashboardRef.current, {
-        useCORS: true,
-        allowTaint: true,
-        scale: window.devicePixelRatio || 1,
-        logging: false,
+      const dataUrl = await toJpeg(dashboardRef.current, {
+        quality: 0.92,
+        pixelRatio: window.devicePixelRatio || 1,
         backgroundColor: isLight ? '#f8fafc' : '#0f172a',
+        skipFonts: false,
+        cacheBust: true,
       });
-
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
       // Trigger browser download
       const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);

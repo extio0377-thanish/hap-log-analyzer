@@ -42,7 +42,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   optimizeDeps: {
-    include: ["html2canvas"],
+    include: ["html-to-image"],
   },
   root: path.resolve(import.meta.dirname),
   build: {
