@@ -83,7 +83,7 @@ export default function Home() {
             </h2>
             <p className="text-muted-foreground text-sm max-w-md">
               {isLive
-                ? `Tailing ${livePath} — events will appear as they arrive.`
+                ? 'Connected — events will appear as they arrive.'
                 : 'Starting live tail from server default path.'}
             </p>
           </div>

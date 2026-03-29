@@ -98,7 +98,7 @@ export function DashboardView({
             )}
           </h1>
           <p className="text-muted-foreground mt-1 text-sm font-mono">
-            {isLive ? `Tailing: ${livePath}` : `Analyzed period: ${s.timeRange.start} — ${s.timeRange.end}`}
+            Analyzed period: {s.timeRange.start} — {s.timeRange.end}
           </p>
         </div>
         
