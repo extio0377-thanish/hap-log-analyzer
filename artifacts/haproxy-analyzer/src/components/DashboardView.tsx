@@ -43,13 +43,13 @@ export function DashboardView({
     setScreenshotting(true);
     try {
       const html2canvas = (await import('html2canvas')).default;
+      const isLight = document.documentElement.classList.contains('light');
       const canvas = await html2canvas(dashboardRef.current, {
         useCORS: true,
         allowTaint: true,
         scale: window.devicePixelRatio || 1,
         logging: false,
-        backgroundColor: getComputedStyle(document.documentElement)
-          .getPropertyValue('--background') || '#0f172a',
+        backgroundColor: isLight ? '#f8fafc' : '#0f172a',
       });
 
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
