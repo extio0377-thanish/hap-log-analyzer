@@ -118,7 +118,7 @@ export function DashboardView({
       {/* Charts & Events */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6 h-[400px]">
         <div className="xl:col-span-2">
-          <TrafficChart data={report.hourlyDistribution} />
+          <TrafficChart connections={report.connections} />
         </div>
         <div className="xl:col-span-1">
           <ServerEvents events={report.serverEvents} />
