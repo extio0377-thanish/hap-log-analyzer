@@ -9,6 +9,8 @@ export interface ConnectionEntry {
   terminationState: string;
   connStats: string;
   isHttp: boolean;
+  /** True only for JSON-structured MSB/EXTIO log entries (shown in Live Traffic table) */
+  isJsonLog?: boolean;
   httpMethod?: string;
   httpUrl?: string;
   httpStatusCode?: number;
@@ -60,12 +62,12 @@ export interface LogReport {
 }
 
 // JSON-structured log format (MSB API Gateway / custom HAProxy log format):
-// <ISO_TIMESTAMP> <host> haproxy[pid]: {"timestamp":"...","Source IP":"...","method":"...","uri":"...","RESPONSE: ":"..."}
+// <ISO_TIMESTAMP> <host> haproxy[pid]: {"logger_type":"EXTIO","timestamp":"...","Source IP":"...","method":"...","uri":"..."}
 const JSON_LOG_RE = /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+(\{.+\})\s*$/;
 
 /** Extract a simple string field from a (possibly malformed) JSON object string.
- *  Only works for fields whose values contain no unescaped double-quotes — which
- *  covers all the structured fields we care about (IP, method, uri, X-API-Key). */
+ *  Reliable for fields whose values contain no unescaped double-quotes — which
+ *  covers all structured fields (IP, method, uri, X-API-Key, payload_size, etc.). */
 function extractJsonField(jsonStr: string, field: string): string | undefined {
   const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`"${escaped}"\\s*:\\s*"([^"]+)"`);
@@ -73,19 +75,58 @@ function extractJsonField(jsonStr: string, field: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
+const MONTH_IDX: Record<string, number> = {
+  Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11,
+};
+
+/**
+ * Compute duration in ms between the request-accepted time (JSON "timestamp" field,
+ * local server time in "DD/Mon/YYYY:HH:MM:SS.mmm" format) and the log-written time
+ * (outer syslog ISO 8601 timestamp, includes timezone offset).
+ * duration = outerTimestamp − jsonTimestamp  (both converted to UTC ms)
+ */
+function computeDurationMs(outerIsoTs: string, jsonHaproxyTs: string): number {
+  const outerMs = new Date(outerIsoTs).getTime();
+  if (isNaN(outerMs)) return 0;
+
+  // e.g. "29/Mar/2026:09:43:46.580"
+  const dm = jsonHaproxyTs.match(
+    /^(\d{1,2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2})\.?(\d*)/
+  );
+  if (!dm) return 0;
+  const [, day, mon, year, hr, min, sec, frac] = dm;
+  const fracMs = parseInt((frac || '0').padEnd(3, '0').slice(0, 3));
+
+  // Extract timezone offset from outer ISO timestamp (e.g. "+03:00")
+  const tzMatch = outerIsoTs.match(/([+-])(\d{2}):(\d{2})$/);
+  let tzOffsetMs = 0;
+  if (tzMatch) {
+    const sign = tzMatch[1] === '+' ? 1 : -1;
+    tzOffsetMs = sign * (parseInt(tzMatch[2]) * 60 + parseInt(tzMatch[3])) * 60000;
+  }
+
+  // JSON timestamp is local server time → convert to UTC by subtracting offset
+  const jsonUtcMs = Date.UTC(
+    parseInt(year), MONTH_IDX[mon] ?? 0, parseInt(day),
+    parseInt(hr), parseInt(min), parseInt(sec), fracMs
+  ) - tzOffsetMs;
+
+  return Math.max(0, outerMs - jsonUtcMs);
+}
+
 function tryParseJsonLine(line: string): ConnectionEntry | null {
   const m = line.match(JSON_LOG_RE);
   if (!m) return null;
-  const outerTimestamp = m[1]; // ISO 8601 — used for hourly bucketing
+  const outerTimestamp = m[1]; // ISO 8601 — used for hourly bucketing + duration
   const jsonStr = m[2];
 
   // Attempt 1: well-formed JSON (fast path)
   let obj: Record<string, string> | null = null;
   try { obj = JSON.parse(jsonStr); } catch { /* fall through to regex extraction */ }
 
-  // Helper: read a field from the parsed object or fall back to regex extraction.
-  // The regex path handles logs where XML/SOAP bodies contain unescaped quotes.
-  const field = (key: string, ...aliases: string[]): string | undefined => {
+  // Helper: read a field from the parsed object or via regex fallback.
+  // Regex path handles logs where XML/SOAP bodies contain unescaped quotes.
+  const getField = (key: string, ...aliases: string[]): string | undefined => {
     for (const k of [key, ...aliases]) {
       const v = obj ? obj[k] : extractJsonField(jsonStr, k);
       if (v !== undefined && v !== '') return v;
@@ -93,26 +134,32 @@ function tryParseJsonLine(line: string): ConnectionEntry | null {
     return undefined;
   };
 
-  const clientIp  = field('Source IP', 'source_ip', 'client_ip') ?? '?';
-  const method    = field('method', 'Method') ?? 'POST';
-  const uri       = field('uri', 'url', 'URI') ?? '/';
-  const apiKey    = field('X-API-Key', 'x-api-key', 'apikey');
-  const sslSubject = field('ssl_subject', 'ssl_cn_subject');
+  const clientIp   = getField('Source IP', 'source_ip', 'client_ip') ?? '?';
+  const method     = getField('method', 'Method') ?? 'POST';
+  const uri        = getField('uri', 'url', 'URI') ?? '/';
+  const apiKey     = getField('X-API-Key', 'x-api-key', 'apikey');
+  const sslSubject = getField('ssl_subject', 'ssl_cn_subject');
+  const jsonTs     = getField('timestamp') ?? ''; // used for duration calc
+  const payloadStr = getField('payload_size', 'bytes', 'content_length');
 
-  // Extract CN from ssl_subject (e.g. "/C=IN/.../CN=srv-stage-lbr/emailAddress=...")
+  // Bytes from payload_size field (string number like "618")
+  const bytesTransferred = payloadStr ? (parseInt(payloadStr, 10) || 0) : 0;
+
+  // Duration: outer syslog timestamp − JSON request-accepted timestamp
+  const responseTimeMs = jsonTs ? computeDurationMs(outerTimestamp, jsonTs) : 0;
+
+  // CN from ssl_subject  e.g. "/C=IN/.../CN=srv-stage-lbr/emailAddress=..."
   let sslCn: string | undefined;
   if (sslSubject && sslSubject !== '-') {
     const cnMatch = sslSubject.match(/\/CN=([^\/]+)/);
     if (cnMatch) sslCn = cnMatch[1].trim();
   }
 
-  // Extract status code.
-  // Priority 1: direct "status" field (new format — string value like "500")
-  // Priority 2: XML <responseCode>NNN</responseCode> in response body
-  // Priority 3: JSON "responseCode"/"statusCode" numeric field
-  // The regex uses "? to handle both quoted-string and numeric JSON values.
+  // Status code — Priority 1: "status":"500" direct field
+  // Priority 2: <responseCode>NNN</responseCode> in XML body
+  // Priority 3: "responseCode":404 or "responseCode":"404" in JSON body
   let statusCode: number | undefined;
-  const statusField = field('status');
+  const statusField = getField('status');
   if (statusField && /^\d{3}$/.test(statusField)) {
     statusCode = parseInt(statusField, 10);
   } else {
@@ -120,13 +167,12 @@ function tryParseJsonLine(line: string): ConnectionEntry | null {
     if (xmlMatch) {
       statusCode = parseInt(xmlMatch[1], 10);
     } else {
-      // matches both "responseCode":404 (number) and "responseCode":"404" (string)
       const jsonMatch = line.match(/"(?:responseCode|statusCode|httpCode)"\s*:\s*"?(\d{3})"?/);
       if (jsonMatch) statusCode = parseInt(jsonMatch[1], 10);
     }
   }
 
-  // Derive backend from the URI path (handles both plain paths and full URLs)
+  // Backend from URI path (handles both plain /path and full https://... URLs)
   let uriPath = uri;
   try { uriPath = new URL(uri).pathname; } catch { /* uri is already a path */ }
   const uriSegment = (uriPath.startsWith('/') ? uriPath.slice(1) : uriPath).split('/')[0] || 'MSB-API';
@@ -137,11 +183,12 @@ function tryParseJsonLine(line: string): ConnectionEntry | null {
     frontend: 'MSB-API',
     backend: uriSegment,
     server: '-',
-    responseTimeMs: 0,
-    bytesTransferred: 0,
+    responseTimeMs,
+    bytesTransferred,
     terminationState: '-',
     connStats: '-',
     isHttp: true,
+    isJsonLog: true,
     httpMethod: method,
     httpUrl: uri,
     httpStatusCode: statusCode,

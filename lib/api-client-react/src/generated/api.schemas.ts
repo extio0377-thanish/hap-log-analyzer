@@ -53,6 +53,8 @@ export interface ConnectionEntry {
   apiKey?: string;
   /** Common Name extracted from ssl_subject (MSB JSON log format) */
   sslCn?: string;
+  /** True only for JSON-structured MSB/EXTIO log entries (shown in Live Traffic table) */
+  isJsonLog?: boolean;
 }
 
 export type ServerEventStatus =
