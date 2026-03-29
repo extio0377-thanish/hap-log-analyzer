@@ -61,7 +61,7 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
   const rowsPerPage = 20;
 
   const httpConnections = useMemo(
-    () => connections.filter(c => c.isJsonLog === true),
+    () => [...(connections ?? []).filter(c => c.isJsonLog === true)].reverse(),
     [connections]
   );
 
