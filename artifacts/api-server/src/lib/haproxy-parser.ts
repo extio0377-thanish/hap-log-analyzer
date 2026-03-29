@@ -12,6 +12,7 @@ export interface ConnectionEntry {
   httpMethod?: string;
   httpUrl?: string;
   httpStatusCode?: number;
+  apiKey?: string;
 }
 
 export interface ServerEvent {
@@ -61,54 +62,70 @@ export interface LogReport {
 // <ISO_TIMESTAMP> <host> haproxy[pid]: {"timestamp":"...","Source IP":"...","method":"...","uri":"...","RESPONSE: ":"..."}
 const JSON_LOG_RE = /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+(\{.+\})\s*$/;
 
+/** Extract a simple string field from a (possibly malformed) JSON object string.
+ *  Only works for fields whose values contain no unescaped double-quotes — which
+ *  covers all the structured fields we care about (IP, method, uri, X-API-Key). */
+function extractJsonField(jsonStr: string, field: string): string | undefined {
+  const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`"${escaped}"\\s*:\\s*"([^"]+)"`);
+  const m = jsonStr.match(re);
+  return m ? m[1] : undefined;
+}
+
 function tryParseJsonLine(line: string): ConnectionEntry | null {
   const m = line.match(JSON_LOG_RE);
   if (!m) return null;
   const outerTimestamp = m[1]; // ISO 8601 — used for hourly bucketing
-  try {
-    const obj = JSON.parse(m[2]);
-    const clientIp: string =
-      obj['Source IP'] ?? obj['source_ip'] ?? obj['client_ip'] ?? '?';
-    const method: string =
-      obj['method'] ?? obj['Method'] ?? 'GET';
-    const uri: string =
-      obj['uri'] ?? obj['url'] ?? obj['URI'] ?? '/';
-    const responseBody: string =
-      obj['RESPONSE: '] ?? obj['response'] ?? '-';
+  const jsonStr = m[2];
 
-    // Try to extract HTTP status code from response body (XML or JSON)
-    let statusCode: number | undefined;
-    if (responseBody && responseBody !== '-') {
-      const xmlMatch = responseBody.match(/<responseCode>(\d{3})<\/responseCode>/);
-      if (xmlMatch) {
-        statusCode = parseInt(xmlMatch[1], 10);
-      } else {
-        const jsonMatch = responseBody.match(/"(?:status|responseCode|statusCode|code)"\s*:\s*(\d{3})/);
-        if (jsonMatch) statusCode = parseInt(jsonMatch[1], 10);
-      }
+  // Attempt 1: well-formed JSON (fast path)
+  let obj: Record<string, string> | null = null;
+  try { obj = JSON.parse(jsonStr); } catch { /* fall through to regex extraction */ }
+
+  // Helper: read a field from the parsed object or fall back to regex extraction.
+  // The regex path handles logs where XML/SOAP bodies contain unescaped quotes.
+  const field = (key: string, ...aliases: string[]): string | undefined => {
+    for (const k of [key, ...aliases]) {
+      const v = obj ? obj[k] : extractJsonField(jsonStr, k);
+      if (v !== undefined && v !== '') return v;
     }
+    return undefined;
+  };
 
-    // Derive a backend name from the first URI segment
-    const uriSegment = (uri.startsWith('/') ? uri.slice(1) : uri).split('/')[0] || 'MSB-API';
+  const clientIp  = field('Source IP', 'source_ip', 'client_ip') ?? '?';
+  const method    = field('method', 'Method') ?? 'POST';
+  const uri       = field('uri', 'url', 'URI') ?? '/';
+  const apiKey    = field('X-API-Key', 'x-api-key', 'apikey');
 
-    return {
-      timestamp: outerTimestamp,
-      clientIp,
-      frontend: 'MSB-API',
-      backend: uriSegment,
-      server: '-',
-      responseTimeMs: 0,
-      bytesTransferred: 0,
-      terminationState: '-',
-      connStats: '-',
-      isHttp: true,
-      httpMethod: method,
-      httpUrl: uri,
-      httpStatusCode: statusCode,
-    };
-  } catch {
-    return null;
+  // Extract status code directly from the raw line — works even when JSON is malformed.
+  // Covers both XML (<responseCode>401</responseCode>) and plain JSON status fields.
+  let statusCode: number | undefined;
+  const xmlMatch = line.match(/<responseCode>(\d{3})<\/responseCode>/);
+  if (xmlMatch) {
+    statusCode = parseInt(xmlMatch[1], 10);
+  } else {
+    const jsonMatch = line.match(/"(?:status|responseCode|statusCode|httpCode)"\s*:\s*(\d{3})/);
+    if (jsonMatch) statusCode = parseInt(jsonMatch[1], 10);
   }
+
+  const uriSegment = (uri.startsWith('/') ? uri.slice(1) : uri).split('/')[0] || 'MSB-API';
+
+  return {
+    timestamp: outerTimestamp,
+    clientIp,
+    frontend: 'MSB-API',
+    backend: uriSegment,
+    server: '-',
+    responseTimeMs: 0,
+    bytesTransferred: 0,
+    terminationState: '-',
+    connStats: '-',
+    isHttp: true,
+    httpMethod: method,
+    httpUrl: uri,
+    httpStatusCode: statusCode,
+    apiKey,
+  };
 }
 
 // HAProxy HTTP log format WITH request line (standard HTTP logging):

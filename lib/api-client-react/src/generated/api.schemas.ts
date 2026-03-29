@@ -49,6 +49,8 @@ export interface ConnectionEntry {
   httpStatusCode?: number;
   /** True if this entry is an HTTP log entry */
   isHttp: boolean;
+  /** API key extracted from X-API-Key header (MSB JSON log format) */
+  apiKey?: string;
 }
 
 export type ServerEventStatus =

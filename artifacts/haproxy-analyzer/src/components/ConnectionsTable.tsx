@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Search, List, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, List, ChevronLeft, ChevronRight, RefreshCw, Key } from 'lucide-react';
 import type { ConnectionEntry } from '@workspace/api-client-react';
 import { formatBytes, cn } from '@/lib/utils';
 
@@ -72,7 +72,8 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
       c.clientIp.toLowerCase().includes(lower) ||
       (c.httpUrl ?? '').toLowerCase().includes(lower) ||
       (c.httpMethod ?? '').toLowerCase().includes(lower) ||
-      String(c.httpStatusCode ?? '').includes(lower)
+      String(c.httpStatusCode ?? '').includes(lower) ||
+      (c.apiKey ?? '').toLowerCase().includes(lower)
     );
   }, [httpConnections, search]);
 
@@ -131,6 +132,9 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">Method</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px]">URL</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-center">Status</th>
+              <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap">
+                <span className="flex items-center gap-1"><Key className="w-3 h-3" />X-API-Key</span>
+              </th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-right">Duration</th>
               <th className="px-4 py-3 font-medium uppercase tracking-wider text-[11px] whitespace-nowrap text-right">Bytes</th>
             </tr>
@@ -153,6 +157,18 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
                 <td className="px-4 py-2.5 text-center whitespace-nowrap">
                   <StatusCodeBadge code={conn.httpStatusCode} />
                 </td>
+                <td className="px-4 py-2.5 font-mono whitespace-nowrap max-w-[160px]">
+                  {conn.apiKey ? (
+                    <span
+                      className="text-amber-400/80 text-[10px] truncate block"
+                      title={conn.apiKey}
+                    >
+                      {conn.apiKey}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-2.5 text-right font-mono whitespace-nowrap text-muted-foreground">
                   {conn.responseTimeMs >= 1000
                     ? `${(conn.responseTimeMs / 1000).toFixed(1)}s`
@@ -165,7 +181,7 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
             ))}
             {paginated.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-16 text-center">
+                <td colSpan={8} className="px-6 py-16 text-center">
                   <p className="text-muted-foreground text-sm">
                     {httpConnections.length === 0
                       ? 'No HTTP traffic found in the current log.'
