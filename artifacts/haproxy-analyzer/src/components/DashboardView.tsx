@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Activity, HardDrive, AlertTriangle, Globe, Clock, Users, RefreshCw, Sun, Moon } from 'lucide-react';
+import { X, Activity, HardDrive, AlertTriangle, Globe, Clock, Users, RefreshCw, Sun, Moon, Camera } from 'lucide-react';
 import { StatCard } from './StatCard';
 import { TrafficChart } from './TrafficChart';
 import { ServerEvents } from './ServerEvents';
@@ -33,9 +33,51 @@ export function DashboardView({
 }: DashboardViewProps) {
   const { theme, toggleTheme } = useTheme();
   const s = report.summary;
+  const dashboardRef = useRef<HTMLDivElement>(null);
+  const [screenshotting, setScreenshotting] = useState(false);
+
+  const handleScreenshot = async () => {
+    if (!dashboardRef.current || screenshotting) return;
+    setScreenshotting(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(dashboardRef.current, {
+        useCORS: true,
+        allowTaint: true,
+        scale: window.devicePixelRatio || 1,
+        logging: false,
+        backgroundColor: getComputedStyle(document.documentElement)
+          .getPropertyValue('--background') || '#0f172a',
+      });
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+      // Trigger browser download
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `msb-dashboard-${ts}.jpg`;
+      a.click();
+
+      // Upload to API so GET /api/screenshot can serve it
+      try {
+        await fetch('/api/screenshot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+      } catch (err) {
+        console.warn('Screenshot upload to API failed:', err);
+      }
+    } catch (err) {
+      console.error('Screenshot capture failed:', err);
+    } finally {
+      setScreenshotting(false);
+    }
+  };
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto pb-20">
+    <div ref={dashboardRef} className="w-full max-w-[1600px] mx-auto pb-20">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pt-6">
         <div>
@@ -65,6 +107,17 @@ export function DashboardView({
           >
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             {theme === 'dark' ? 'Light' : 'Dark'}
+          </button>
+
+          {/* Screenshot button */}
+          <button
+            onClick={handleScreenshot}
+            disabled={screenshotting}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-wait"
+            title="Capture dashboard screenshot (downloads as JPG + posts to GET /api/screenshot)"
+          >
+            <Camera className={`w-4 h-4 ${screenshotting ? 'animate-pulse text-primary' : ''}`} />
+            {screenshotting ? 'Capturing…' : 'Screenshot'}
           </button>
 
           {/* Auto Refresh toggle */}
