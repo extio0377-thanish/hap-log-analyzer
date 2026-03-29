@@ -29,9 +29,9 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 mb-4">
-            <span className="text-3xl font-black text-primary">M</span>
+            <span className="text-3xl font-black text-primary">E</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">MSB Traffic Visualizer</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Extio APISTRATOR</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to your account</p>
         </div>
 

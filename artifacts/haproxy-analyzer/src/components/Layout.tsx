@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/auth-context';
-import { LayoutDashboard, Users, ShieldCheck, LogOut, User, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldCheck, LogOut, User, ChevronDown, Settings } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -27,8 +27,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="flex items-center gap-4 px-4 h-14">
-          <span className="font-bold text-primary tracking-tight mr-2 whitespace-nowrap">
-            MSB Analyzer
+          <span className="font-bold text-primary tracking-tight mr-2 whitespace-nowrap text-lg">
+            APISTRATOR
           </span>
 
           <nav className="flex items-center gap-1 flex-1 overflow-x-auto">
@@ -64,7 +64,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-52 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
                   <div className="px-3 py-2 border-b border-border">
                     <p className="text-sm font-medium truncate">{user?.fullName}</p>
                     <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
@@ -76,12 +76,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <User size={14} /> My Profile
                     </a>
                   </Link>
-                  <button
-                    onClick={() => { setMenuOpen(false); logout(); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <LogOut size={14} /> Logout
-                  </button>
+                  <Link href="/log-config">
+                    <a className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
+                       onClick={() => setMenuOpen(false)}>
+                      <Settings size={14} /> Log Configuration
+                    </a>
+                  </Link>
+                  <div className="border-t border-border mt-1">
+                    <button
+                      onClick={() => { setMenuOpen(false); logout(); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <LogOut size={14} /> Logout
+                    </button>
+                  </div>
                 </div>
               </>
             )}

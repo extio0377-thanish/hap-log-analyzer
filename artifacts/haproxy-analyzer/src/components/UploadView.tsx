@@ -62,7 +62,7 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 text-primary mb-6 shadow-[0_0_30px_hsl(var(--primary)/0.2)]">
           <Terminal className="w-8 h-8" />
         </div>
-        <h1 className="text-4xl font-bold text-foreground mb-4">MSB Traffic Visualizer</h1>
+        <h1 className="text-4xl font-bold text-foreground mb-4">Extio APISTRATOR</h1>
         <p className="text-lg text-muted-foreground">Drop a log file to parse instantly, or connect to a live stream.</p>
       </motion.div>
 
@@ -79,7 +79,7 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
             )}
           >
             <UploadCloud className={cn("w-12 h-12 mx-auto mb-4 transition-colors duration-300", dragging ? "text-primary" : "text-muted-foreground group-hover:text-primary/70")} />
-            <h3 className="text-xl font-medium mb-2 text-foreground">Upload MSB Log</h3>
+            <h3 className="text-xl font-medium mb-2 text-foreground">Upload HAProxy Log</h3>
             <p className="text-muted-foreground mb-6 text-sm">Drag and drop your .log file here</p>
             <input 
               type="file" 

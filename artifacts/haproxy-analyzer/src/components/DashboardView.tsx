@@ -57,9 +57,11 @@ export function DashboardView({
       // Trigger browser download
       const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const a = document.createElement('a');
+      document.body.appendChild(a);
       a.href = dataUrl;
-      a.download = `msb-dashboard-${ts}.jpg`;
+      a.download = `apistrator-dashboard-${ts}.jpg`;
       a.click();
+      document.body.removeChild(a);
 
       // Upload to API so GET /api/screenshot can serve it
       try {
@@ -71,7 +73,8 @@ export function DashboardView({
         console.warn('Screenshot upload to API failed:', err);
       }
     } catch (err) {
-      console.error('Screenshot capture failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('Screenshot capture failed:', msg, err);
     } finally {
       setScreenshotting(false);
     }
@@ -83,7 +86,7 @@ export function DashboardView({
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pt-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            MSB Traffic Visualizer
+            Extio APISTRATOR
             {isLive && (
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider mt-1">
                 <span className="relative flex h-2 w-2">

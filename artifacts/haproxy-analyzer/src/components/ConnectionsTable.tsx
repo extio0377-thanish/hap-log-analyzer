@@ -11,13 +11,13 @@ function StatusCodeBadge({ code }: { code?: number }) {
   const label = String(code);
 
   if (code >= 200 && code < 300) {
-    colorClass = 'bg-green-500/15 text-green-400 border border-green-500/30';
+    colorClass = 'bg-green-500/20 text-green-700 border border-green-500/40';
   } else if (code >= 300 && code < 400) {
-    colorClass = 'bg-blue-500/15 text-blue-400 border border-blue-500/30';
+    colorClass = 'bg-blue-500/20 text-blue-700 border border-blue-500/40';
   } else if (code >= 400 && code < 500) {
-    colorClass = 'bg-orange-500/15 text-orange-400 border border-orange-500/30';
+    colorClass = 'bg-orange-500/20 text-orange-700 border border-orange-500/40';
   } else if (code >= 500) {
-    colorClass = 'bg-red-500/15 text-red-400 border border-red-500/30';
+    colorClass = 'bg-red-500/20 text-red-700 border border-red-500/40';
   } else {
     colorClass = 'bg-muted text-muted-foreground border border-border';
   }
@@ -33,17 +33,17 @@ function MethodBadge({ method }: { method?: string }) {
   if (!method) return <span className="text-muted-foreground">—</span>;
 
   const colors: Record<string, string> = {
-    GET:     'text-cyan-400',
-    POST:    'text-violet-400',
-    PUT:     'text-yellow-400',
-    PATCH:   'text-orange-400',
-    DELETE:  'text-red-400',
-    HEAD:    'text-muted-foreground',
-    OPTIONS: 'text-muted-foreground',
+    GET:     'bg-cyan-500/20 text-cyan-700 border border-cyan-500/40',
+    POST:    'bg-violet-500/20 text-violet-700 border border-violet-500/40',
+    PUT:     'bg-yellow-500/20 text-yellow-700 border border-yellow-500/40',
+    PATCH:   'bg-orange-500/20 text-orange-700 border border-orange-500/40',
+    DELETE:  'bg-red-500/20 text-red-700 border border-red-500/40',
+    HEAD:    'bg-muted text-muted-foreground border border-border',
+    OPTIONS: 'bg-muted text-muted-foreground border border-border',
   };
 
   return (
-    <span className={cn('font-mono font-bold text-[11px] uppercase', colors[method] ?? 'text-foreground')}>
+    <span className={cn('inline-block font-mono font-bold text-[11px] uppercase px-2 py-0.5 rounded', colors[method] ?? 'bg-muted text-foreground border border-border')}>
       {method}
     </span>
   );
@@ -161,7 +161,7 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
                 <td className="px-4 py-2.5 font-mono whitespace-nowrap max-w-[160px]">
                   {conn.apiKey ? (
                     <span
-                      className="text-amber-400/80 text-[10px] truncate block"
+                      className="bg-amber-500/20 text-amber-700 border border-amber-500/40 text-[10px] px-1.5 py-0.5 rounded truncate block"
                       title={conn.apiKey}
                     >
                       {conn.apiKey}
@@ -173,7 +173,7 @@ export function ConnectionsTable({ connections, onRefresh }: ConnectionsTablePro
                 <td className="px-4 py-2.5 whitespace-nowrap max-w-[140px]">
                   {conn.sslCn ? (
                     <span
-                      className="text-emerald-400/80 font-mono text-[10px] truncate block"
+                      className="bg-emerald-500/20 text-emerald-700 border border-emerald-500/40 font-mono text-[10px] px-1.5 py-0.5 rounded truncate block"
                       title={conn.sslCn}
                     >
                       {conn.sslCn}

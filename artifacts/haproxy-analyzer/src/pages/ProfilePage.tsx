@@ -3,11 +3,11 @@ import { Layout } from '@/components/Layout';
 import { Spinner } from '@/components/Spinner';
 import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter';
 import { useAuth } from '@/contexts/auth-context';
-import { useTheme, type ColorTheme } from '@/lib/theme-context';
+import { useTheme, type ColorTheme, type DarkMode } from '@/lib/theme-context';
 import { apiPut, apiGet } from '@/lib/api-client';
 import { setToken } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, User, Lock, Palette } from 'lucide-react';
+import { Eye, EyeOff, User, Lock, Palette, Sun, Moon } from 'lucide-react';
 import type { PolicyShape } from '@/components/PasswordStrengthMeter';
 
 interface AuthUser {
@@ -28,7 +28,7 @@ type Section = 'profile' | 'password' | 'theme';
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
-  const { colorTheme, setColorTheme } = useTheme();
+  const { colorTheme, setColorTheme, darkMode, toggleDarkMode } = useTheme();
   const { toast } = useToast();
   const [section, setSection] = useState<Section>('profile');
 
@@ -187,26 +187,67 @@ export default function ProfilePage() {
           )}
 
           {section === 'theme' && (
-            <div className="space-y-4">
-              <h2 className="font-semibold">Color Theme</h2>
-              <p className="text-sm text-muted-foreground">Choose your preferred accent color. Changes apply immediately.</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {COLOR_THEMES.map(t => (
-                  <button key={t.id} onClick={() => saveTheme(t.id)}
-                    className={`group relative flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 transition-all
-                      ${colorTheme === t.id ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground bg-muted/20'}`}>
-                    <div className="h-10 w-10 rounded-full shadow-md transition-transform group-hover:scale-105"
-                      style={{ backgroundColor: t.color }} />
-                    <span className={`text-xs font-medium ${colorTheme === t.id ? 'text-primary' : 'text-foreground'}`}>
-                      {t.label}
-                    </span>
-                    {colorTheme === t.id && (
-                      <span className="absolute top-2 right-2 text-primary text-xs">✓</span>
-                    )}
-                  </button>
-                ))}
+            <div className="space-y-8">
+              {/* Color Theme */}
+              <div className="space-y-4">
+                <div>
+                  <h2 className="font-semibold">Color Theme</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">Choose your preferred accent color. Changes apply immediately.</p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {COLOR_THEMES.map(t => (
+                    <button key={t.id} onClick={() => saveTheme(t.id)}
+                      className={`group relative flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 transition-all
+                        ${colorTheme === t.id ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground bg-muted/20'}`}>
+                      <div className="h-10 w-10 rounded-full shadow-md transition-transform group-hover:scale-105"
+                        style={{ backgroundColor: t.color }} />
+                      <span className={`text-xs font-medium ${colorTheme === t.id ? 'text-primary' : 'text-foreground'}`}>
+                        {t.label}
+                      </span>
+                      {colorTheme === t.id && (
+                        <span className="absolute top-2 right-2 text-primary text-xs">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {saving && <div className="flex justify-center"><Spinner size="sm" text="Thinking..." /></div>}
               </div>
-              {saving && <div className="flex justify-center"><Spinner size="sm" text="Thinking..." /></div>}
+
+              {/* Divider */}
+              <div className="border-t border-border" />
+
+              {/* Scheme Theme */}
+              <div className="space-y-4">
+                <div>
+                  <h2 className="font-semibold">Scheme Theme</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">Switch between dark and light display modes.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { id: 'dark' as DarkMode, label: 'Dark', icon: <Moon size={22} />, desc: 'Easy on the eyes in low light' },
+                    { id: 'light' as DarkMode, label: 'Light', icon: <Sun size={22} />, desc: 'Crisp and clear in bright environments' },
+                  ] as { id: DarkMode; label: string; icon: React.ReactNode; desc: string }[]).map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => { if (darkMode !== s.id) toggleDarkMode(); }}
+                      className={`group relative flex flex-col items-center gap-3 p-5 rounded-xl border-2 transition-all text-center
+                        ${darkMode === s.id ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground bg-muted/20'}`}
+                    >
+                      <div className={`flex items-center justify-center h-12 w-12 rounded-full transition-all
+                        ${darkMode === s.id ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground group-hover:text-foreground'}`}>
+                        {s.icon}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold ${darkMode === s.id ? 'text-primary' : 'text-foreground'}`}>{s.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
+                      </div>
+                      {darkMode === s.id && (
+                        <span className="absolute top-2 right-2 text-primary text-xs">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
