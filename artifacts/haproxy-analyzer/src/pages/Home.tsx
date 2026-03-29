@@ -34,7 +34,7 @@ export default function Home() {
     fetch(`${base}/api/app-config`)
       .then(r => r.json())
       .then(cfg => {
-        const path = cfg.defaultLogPath || '/var/log/haproxy.log';
+        const path = cfg.defaultLogPath || '/var/log/extio-engine.log';
         startLiveTail(path);
         setInitState('connected');
       })
@@ -84,7 +84,7 @@ export default function Home() {
             <p className="text-muted-foreground text-sm max-w-md">
               {isLive
                 ? 'Connected — events will appear as they arrive.'
-                : 'Starting live tail from server default path.'}
+                : 'Starting live fetch from server default path.'}
             </p>
           </div>
           <Link href="/log-config">

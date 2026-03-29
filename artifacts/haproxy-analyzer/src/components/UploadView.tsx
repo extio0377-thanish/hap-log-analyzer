@@ -79,7 +79,7 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
             )}
           >
             <UploadCloud className={cn("w-12 h-12 mx-auto mb-4 transition-colors duration-300", dragging ? "text-primary" : "text-muted-foreground group-hover:text-primary/70")} />
-            <h3 className="text-xl font-medium mb-2 text-foreground">Upload HAProxy Log</h3>
+            <h3 className="text-xl font-medium mb-2 text-foreground">Upload Extio Engine Log</h3>
             <p className="text-muted-foreground mb-6 text-sm">Drag and drop your .log file here</p>
             <input 
               type="file" 
@@ -109,12 +109,12 @@ export function UploadView({ onUpload, onLiveTail, isParsing }: UploadViewProps)
           <div className="bg-background/50 rounded-xl p-6 border border-border/50">
             <h3 className="text-base font-medium mb-4 flex items-center gap-2 text-foreground">
               <Activity className="w-5 h-5 text-primary" />
-              Live Log Tail
+              Live Log Fetch
             </h3>
             <form onSubmit={handleLiveSubmit} className="flex gap-3">
               <input
                 type="text"
-                placeholder="/var/log/haproxy.log"
+                placeholder="/var/log/extio-engine.log"
                 className="flex-1 bg-card border border-border rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 font-mono text-sm text-foreground placeholder:text-muted-foreground/50 transition-all shadow-inner"
                 value={path}
                 onChange={(e) => setPath(e.target.value)}

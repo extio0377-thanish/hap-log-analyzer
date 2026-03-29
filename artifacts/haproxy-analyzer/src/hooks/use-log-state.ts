@@ -107,7 +107,7 @@ export function useLogState() {
     es.onerror = (error) => {
       console.error('EventSource failed:', error);
       toast({
-        title: 'Live tail connection error',
+        title: 'Live fetch connection error',
         description: 'Lost connection to the log stream.',
         variant: 'destructive',
       });
@@ -122,7 +122,7 @@ export function useLogState() {
       eventSourceRef.current = null;
     }
     setIsLive(false);
-    toast({ title: 'Live tail stopped' });
+    toast({ title: 'Live fetch stopped' });
   }, [toast]);
 
   useEffect(() => {
