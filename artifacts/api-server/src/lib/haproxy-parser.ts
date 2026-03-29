@@ -57,6 +57,60 @@ export interface LogReport {
   hourlyDistribution: HourlyBucket[];
 }
 
+// JSON-structured log format (MSB API Gateway / custom HAProxy log format):
+// <ISO_TIMESTAMP> <host> haproxy[pid]: {"timestamp":"...","Source IP":"...","method":"...","uri":"...","RESPONSE: ":"..."}
+const JSON_LOG_RE = /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+(\{.+\})\s*$/;
+
+function tryParseJsonLine(line: string): ConnectionEntry | null {
+  const m = line.match(JSON_LOG_RE);
+  if (!m) return null;
+  const outerTimestamp = m[1]; // ISO 8601 — used for hourly bucketing
+  try {
+    const obj = JSON.parse(m[2]);
+    const clientIp: string =
+      obj['Source IP'] ?? obj['source_ip'] ?? obj['client_ip'] ?? '?';
+    const method: string =
+      obj['method'] ?? obj['Method'] ?? 'GET';
+    const uri: string =
+      obj['uri'] ?? obj['url'] ?? obj['URI'] ?? '/';
+    const responseBody: string =
+      obj['RESPONSE: '] ?? obj['response'] ?? '-';
+
+    // Try to extract HTTP status code from response body (XML or JSON)
+    let statusCode: number | undefined;
+    if (responseBody && responseBody !== '-') {
+      const xmlMatch = responseBody.match(/<responseCode>(\d{3})<\/responseCode>/);
+      if (xmlMatch) {
+        statusCode = parseInt(xmlMatch[1], 10);
+      } else {
+        const jsonMatch = responseBody.match(/"(?:status|responseCode|statusCode|code)"\s*:\s*(\d{3})/);
+        if (jsonMatch) statusCode = parseInt(jsonMatch[1], 10);
+      }
+    }
+
+    // Derive a backend name from the first URI segment
+    const uriSegment = (uri.startsWith('/') ? uri.slice(1) : uri).split('/')[0] || 'MSB-API';
+
+    return {
+      timestamp: outerTimestamp,
+      clientIp,
+      frontend: 'MSB-API',
+      backend: uriSegment,
+      server: '-',
+      responseTimeMs: 0,
+      bytesTransferred: 0,
+      terminationState: '-',
+      connStats: '-',
+      isHttp: true,
+      httpMethod: method,
+      httpUrl: uri,
+      httpStatusCode: statusCode,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // HAProxy HTTP log format WITH request line (standard HTTP logging):
 // timestamp host haproxy[pid]: ip:port [date] frontend backend/server Tq/Tw/Tc/Tr/Ta STATUS BYTES [cookie_req] [cookie_resp] term actconn/feconn/beconn/srv/ret q/q [{headers}] "METHOD URL HTTP/x.x"
 // Cookie fields (- -) are optional — 0, 1, or 2 single-dash captures may appear before the termination flags
@@ -79,6 +133,12 @@ const SERVER_EVENT_RE =
 
 
 function tryParseConnection(line: string): ConnectionEntry | null {
+  // 0. Try JSON-structured MSB API Gateway format first (distinct `{` after the syslog prefix)
+  if (line.includes(']: {')) {
+    const je = tryParseJsonLine(line);
+    if (je) return je;
+  }
+
   // 1. Try standard HTTP format with request line at end
   const hm = line.match(HTTP_WITH_REQUEST_RE);
   if (hm) {
