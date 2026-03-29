@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useLogState } from '@/hooks/use-log-state';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useLogStateContext } from '@/contexts/log-state-context';
 import { DashboardView } from '@/components/DashboardView';
 import { Layout } from '@/components/Layout';
 import { Link } from 'wouter';
-import { Loader2, Settings, WifiOff } from 'lucide-react';
+import { Loader2, Settings, WifiOff, RefreshCw } from 'lucide-react';
 
 export default function Home() {
   const {
@@ -17,19 +17,13 @@ export default function Home() {
     clearData,
     toggleAutoRefresh,
     manualRefresh,
-  } = useLogState();
+  } = useLogStateContext();
 
-  const [initState, setInitState] = useState<'loading' | 'connected' | 'error'>('loading');
+  const [initState, setInitState] = useState<'loading' | 'connected' | 'error' | 'cleared'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
   const didAutoStart = useRef(false);
 
-  useEffect(() => {
-    if (didAutoStart.current || report || isLive) {
-      if (isLive || report) setInitState('connected');
-      return;
-    }
-    didAutoStart.current = true;
-
+  const runAutoStart = useCallback(() => {
     const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     fetch(`${base}/api/app-config`)
       .then(r => r.json())
@@ -42,7 +36,26 @@ export default function Home() {
         setErrorMsg('Could not reach server to fetch log configuration.');
         setInitState('error');
       });
+  }, [startLiveTail]);
+
+  useEffect(() => {
+    if (didAutoStart.current || report || isLive) {
+      if (isLive || report) setInitState('connected');
+      return;
+    }
+    didAutoStart.current = true;
+    runAutoStart();
   }, []);
+
+  const handleClear = useCallback(() => {
+    clearData();
+    setInitState('cleared');
+  }, [clearData]);
+
+  const handleReconnect = useCallback(() => {
+    setInitState('loading');
+    runAutoStart();
+  }, [runAutoStart]);
 
   return (
     <Layout>
@@ -51,7 +64,7 @@ export default function Home() {
           report={report}
           isLive={isLive}
           livePath={livePath}
-          onClear={clearData}
+          onClear={handleClear}
           onStopLive={stopLiveTail}
           autoRefresh={autoRefresh}
           onToggleAutoRefresh={toggleAutoRefresh}
@@ -66,11 +79,38 @@ export default function Home() {
             <h2 className="text-xl font-semibold mb-1">Connection Failed</h2>
             <p className="text-muted-foreground text-sm max-w-md">{errorMsg}</p>
           </div>
-          <Link href="/log-config">
-            <a className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
-              <Settings size={15} /> Configure Log Source
-            </a>
+          <Link
+            href="/log-config"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            <Settings size={15} /> Configure Log Source
           </Link>
+        </div>
+      ) : initState === 'cleared' ? (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
+          <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center">
+            <RefreshCw className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold mb-1">Dashboard Cleared</h2>
+            <p className="text-muted-foreground text-sm max-w-md">
+              Reconnect to the live log or upload a log file to start a new session.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleReconnect}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              <RefreshCw size={15} /> Reconnect to Live Log
+            </button>
+            <Link
+              href="/log-config"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <Settings size={15} /> Log Configuration
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
@@ -87,10 +127,11 @@ export default function Home() {
                 : 'Starting live fetch from server default path.'}
             </p>
           </div>
-          <Link href="/log-config">
-            <a className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-              <Settings size={14} /> Change log source
-            </a>
+          <Link
+            href="/log-config"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Settings size={14} /> Change log source
           </Link>
         </div>
       )}
