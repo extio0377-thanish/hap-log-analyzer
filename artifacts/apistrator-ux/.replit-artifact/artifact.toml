@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "HAProxy Log Analyzer"
+title = "Extio APISTRATOR"
 version = "1.0.0"
 id = "artifacts/haproxy-analyzer"
 router = "path"
@@ -15,11 +15,11 @@ paths = [ "/" ]
 localPort = 18118
 
 [services.development]
-run = "pnpm --filter @workspace/haproxy-analyzer run dev"
+run = "pnpm --filter @workspace/apistrator-ux run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/haproxy-analyzer", "run", "build" ]
-publicDir = "artifacts/haproxy-analyzer/dist/public"
+build = [ "pnpm", "--filter", "@workspace/apistrator-ux", "run", "build" ]
+publicDir = "artifacts/apistrator-ux/dist/public"
 serve = "static"
 
 [[services.production.rewrites]]
