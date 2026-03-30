@@ -63,7 +63,9 @@ export interface LogReport {
 
 // JSON-structured log format (MSB API Gateway / custom HAProxy log format):
 // <ISO_TIMESTAMP> <host> haproxy[pid]: {"logger_type":"EXTIO","timestamp":"...","Source IP":"...","method":"...","uri":"..."}
-const JSON_LOG_RE = /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+(\{.+\})\s*$/;
+// NOTE: Lines with large REQUEST bodies (XML/SOAP) may be truncated by syslog before the
+// closing } — we intentionally do NOT require } at the end so truncated lines still parse.
+const JSON_LOG_RE = /^(\S+)\s+\S+\s+haproxy\[\d+\]:\s+(\{.+)/;
 
 /** Extract a simple string field from a (possibly malformed) JSON object string.
  *  Reliable for fields whose values contain no unescaped double-quotes — which
@@ -124,12 +126,21 @@ function tryParseJsonLine(line: string): ConnectionEntry | null {
   let obj: Record<string, string> | null = null;
   try { obj = JSON.parse(jsonStr); } catch { /* fall through to regex extraction */ }
 
-  // Helper: read a field from the parsed object or via regex fallback.
-  // Regex path handles logs where XML/SOAP bodies contain unescaped quotes.
+  // Helper: read a field.
+  // Always try regex extraction as well — JSON.parse may succeed but still
+  // return wrong values for fields that appear after an unescaped quote in a
+  // REQUEST/RESPONSE body (the JSON parser cuts the string there).
   const getField = (key: string, ...aliases: string[]): string | undefined => {
     for (const k of [key, ...aliases]) {
-      const v = obj ? obj[k] : extractJsonField(jsonStr, k);
-      if (v !== undefined && v !== '') return v;
+      // Regex path is authoritative: it matches the literal field pattern
+      // and ignores anything inside the REQUEST/body field.
+      const fromRegex = extractJsonField(jsonStr, k);
+      if (fromRegex !== undefined && fromRegex !== '') return fromRegex;
+      // Fallback to parsed object (covers numeric or non-string JSON values)
+      if (obj) {
+        const v = obj[k];
+        if (v !== undefined && v !== '') return String(v);
+      }
     }
     return undefined;
   };
