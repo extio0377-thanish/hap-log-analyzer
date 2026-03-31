@@ -190,8 +190,8 @@ export const securityDb = {
       config.ssh_user ?? current.ssh_user,
       config.ssh_port ?? current.ssh_port,
       config.ssh_auth_type ?? current.ssh_auth_type,
-      config.ssh_pass !== undefined ? config.ssh_pass : current.ssh_pass,
-      config.ssh_key !== undefined ? config.ssh_key : current.ssh_key,
+      (config.ssh_pass !== undefined && config.ssh_pass !== '') ? config.ssh_pass : current.ssh_pass,
+      (config.ssh_key !== undefined && config.ssh_key !== '') ? config.ssh_key : current.ssh_key,
     );
   },
 };

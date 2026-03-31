@@ -146,9 +146,9 @@ function TopConsumers({ connections }: { connections: ConnectionEntry[] }) {
   }, [connections, filter]);
 
   const chartData = rows.map(r => ({
-    name: r.apiKey.length > 22 ? r.apiKey.slice(0, 20) + '…' : r.apiKey,
+    name: r.sslCn === '—' ? (r.apiKey.length > 22 ? r.apiKey.slice(0, 20) + '…' : r.apiKey) : (r.sslCn.length > 22 ? r.sslCn.slice(0, 20) + '…' : r.sslCn),
     count: r.count,
-    full: r.apiKey,
+    full: r.sslCn === '—' ? r.apiKey : r.sslCn,
   }));
 
   const total = rows.reduce((s, r) => s + r.count, 0);
@@ -181,8 +181,8 @@ function TopConsumers({ connections }: { connections: ConnectionEntry[] }) {
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-1.5 px-2 text-muted-foreground font-medium">#</th>
+                  <th className="text-left py-1.5 px-2 text-muted-foreground font-medium">Vendor System</th>
                   <th className="text-left py-1.5 px-2 text-muted-foreground font-medium">X-API-Key</th>
-                  <th className="text-left py-1.5 px-2 text-muted-foreground font-medium">SSL-CN</th>
                   <th className="text-right py-1.5 px-2 text-muted-foreground font-medium">Count</th>
                   <th className="text-right py-1.5 px-2 text-muted-foreground font-medium">Share</th>
                 </tr>
@@ -191,10 +191,10 @@ function TopConsumers({ connections }: { connections: ConnectionEntry[] }) {
                 {rows.map((r, i) => (
                   <tr key={r.apiKey} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="py-1.5 px-2 text-muted-foreground">{i + 1}</td>
-                    <td className="py-1.5 px-2 font-mono max-w-[180px] truncate" title={r.apiKey}>
-                      <span style={{ color: BAR_COLORS[i % BAR_COLORS.length] }}>{r.apiKey}</span>
+                    <td className="py-1.5 px-2 font-mono max-w-[160px] truncate" title={r.sslCn}>
+                      <span style={{ color: BAR_COLORS[i % BAR_COLORS.length] }}>{r.sslCn}</span>
                     </td>
-                    <td className="py-1.5 px-2 text-muted-foreground max-w-[120px] truncate">{r.sslCn}</td>
+                    <td className="py-1.5 px-2 font-mono max-w-[160px] truncate text-muted-foreground" title={r.apiKey}>{r.apiKey}</td>
                     <td className="py-1.5 px-2 text-right font-semibold tabular-nums">{r.count.toLocaleString()}</td>
                     <td className="py-1.5 px-2 text-right text-muted-foreground tabular-nums">
                       {total > 0 ? ((r.count / total) * 100).toFixed(1) : 0}%

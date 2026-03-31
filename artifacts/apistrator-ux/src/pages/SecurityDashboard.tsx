@@ -101,6 +101,7 @@ const PIE_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5
 // ─── SSH Config Modal ─────────────────────────────────────────────────────────
 function SshConfigModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ ssh_user: 'root', ssh_port: '7779', ssh_auth_type: 'password', ssh_pass: '', ssh_key: '' });
+  const [savedState, setSavedState] = useState({ has_password: false, has_key: false });
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
@@ -112,6 +113,10 @@ function SshConfigModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         ssh_port: String(cfg.ssh_port ?? '7779'),
         ssh_auth_type: String(cfg.ssh_auth_type ?? 'password'),
       }));
+      setSavedState({
+        has_password: !!cfg.has_password,
+        has_key: !!cfg.has_key,
+      });
     }).catch(() => {});
   }, []);
 
@@ -153,16 +158,27 @@ function SshConfigModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           </div>
           {form.ssh_auth_type === 'password' ? (
             <div>
-              <label className="text-xs text-muted-foreground">Password (leave blank to keep existing)</label>
+              <label className="text-xs text-muted-foreground flex items-center gap-1">
+                Password
+                {savedState.has_password && !form.ssh_pass && (
+                  <span className="text-green-400 font-normal">— saved ✓ (leave blank to keep)</span>
+                )}
+              </label>
               <input type="password" className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm"
-                value={form.ssh_pass} onChange={e => setForm(f => ({ ...f, ssh_pass: e.target.value }))} />
+                value={form.ssh_pass} onChange={e => setForm(f => ({ ...f, ssh_pass: e.target.value }))}
+                placeholder={savedState.has_password ? '●●●●●●●● (already saved — leave blank to keep)' : 'Enter password'} />
             </div>
           ) : (
             <div>
-              <label className="text-xs text-muted-foreground">Private Key (PEM format)</label>
+              <label className="text-xs text-muted-foreground flex items-center gap-1">
+                Private Key (PEM format)
+                {savedState.has_key && !form.ssh_key && (
+                  <span className="text-green-400 font-normal">— saved ✓ (leave blank to keep)</span>
+                )}
+              </label>
               <textarea rows={5} className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-xs font-mono"
                 value={form.ssh_key} onChange={e => setForm(f => ({ ...f, ssh_key: e.target.value }))}
-                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                placeholder={savedState.has_key ? '(key already saved — leave blank to keep current key)' : '-----BEGIN OPENSSH PRIVATE KEY-----'} />
             </div>
           )}
         </div>
