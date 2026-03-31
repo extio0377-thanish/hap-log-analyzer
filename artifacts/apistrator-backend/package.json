@@ -20,7 +20,6 @@
     "drizzle-orm": "catalog:",
     "express": "^5",
     "jsonwebtoken": "^9.0.3",
-    "node-cron": "^4.2.1",
     "pino": "^9",
     "pino-http": "^10",
     "ssh2": "^1.17.0"
@@ -33,7 +32,6 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "catalog:",
-    "@types/node-cron": "^3.0.11",
     "@types/ssh2": "^1.15.5",
     "esbuild": "^0.27.3",
     "esbuild-plugin-pino": "^2.3.3",

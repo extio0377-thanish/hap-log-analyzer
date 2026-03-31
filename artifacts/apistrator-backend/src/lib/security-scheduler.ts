@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { securityDb } from './security-db';
 import { collectFromServer } from './ssh-collector';
 import { logger } from './logger';
@@ -7,7 +6,7 @@ import { EventEmitter } from 'node:events';
 export const securityBus = new EventEmitter();
 securityBus.setMaxListeners(100);
 
-let schedulerTask: ReturnType<typeof cron.schedule> | null = null;
+let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 
 async function runScanForServer(ip: string, port: number): Promise<void> {
   const cfg = securityDb.getSshConfig();
@@ -55,19 +54,22 @@ export function runSingleScan(ip: string): Promise<void> {
 }
 
 export function startScheduler(): void {
-  if (schedulerTask) schedulerTask.stop();
+  if (schedulerInterval) clearInterval(schedulerInterval);
 
-  schedulerTask = cron.schedule('* * * * *', async () => {
+  // Run every 60 seconds (same as '* * * * *' cron)
+  schedulerInterval = setInterval(async () => {
     await runAllScans();
-  });
+  }, 60_000);
 
   logger.info('Security scan scheduler started (every 1 minute)');
 
-  // Run immediately on startup (after a short delay to let server fully start)
+  // Run immediately on startup after a short delay to let server fully start
   setTimeout(() => runAllScans().catch(() => {}), 5000);
 }
 
 export function stopScheduler(): void {
-  schedulerTask?.stop();
-  schedulerTask = null;
+  if (schedulerInterval) {
+    clearInterval(schedulerInterval);
+    schedulerInterval = null;
+  }
 }
