@@ -12,9 +12,10 @@ interface ConnectionEntry {
 
 // ─── Duration helpers ─────────────────────────────────────────────────────────
 
-type DurationKey = '1h' | '6h' | '12h' | '1d' | '7d' | 'custom';
+type DurationKey = 'all' | '1h' | '6h' | '12h' | '1d' | '7d' | 'custom';
 
 const DURATION_OPTIONS: { label: string; value: DurationKey; ms: number }[] = [
+  { label: 'All Time',     value: 'all', ms: 0 },
   { label: 'Last 1 Hour',  value: '1h',  ms: 60 * 60 * 1000 },
   { label: 'Last 6 Hours', value: '6h',  ms: 6 * 60 * 60 * 1000 },
   { label: 'Last 12 Hours',value: '12h', ms: 12 * 60 * 60 * 1000 },
@@ -43,19 +44,18 @@ function initFilter(): FilterState {
   const now = new Date();
   const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   return {
-    duration: '1d',
+    duration: 'all',
     customFrom: toLocalDateTimeString(from),
     customTo: toLocalDateTimeString(now),
     rev: 0,
   };
 }
 
-function filterConnections(connections: ConnectionEntry[], filter: FilterState): ConnectionEntry[] {
-  const jsonOnly = connections.filter(c => c.isJsonLog);
+function applyTimeFilter(connections: ConnectionEntry[], filter: FilterState): ConnectionEntry[] {
+  if (filter.duration === 'all') return connections;
   const now = Date.now();
   let fromMs: number;
   let toMs: number;
-
   if (filter.duration === 'custom') {
     fromMs = new Date(filter.customFrom).getTime() || 0;
     toMs   = new Date(filter.customTo).getTime()   || now;
@@ -64,11 +64,19 @@ function filterConnections(connections: ConnectionEntry[], filter: FilterState):
     fromMs = now - (opt?.ms ?? 24 * 60 * 60 * 1000);
     toMs   = now;
   }
-
-  return jsonOnly.filter(c => {
+  return connections.filter(c => {
     const ts = new Date(c.timestamp).getTime();
     return !isNaN(ts) && ts >= fromMs && ts <= toMs;
   });
+}
+
+function filterConsumers(connections: ConnectionEntry[], filter: FilterState): ConnectionEntry[] {
+  const jsonOnly = connections.filter(c => c.isJsonLog === true);
+  return applyTimeFilter(jsonOnly, filter);
+}
+
+function filterApis(connections: ConnectionEntry[], filter: FilterState): ConnectionEntry[] {
+  return applyTimeFilter(connections, filter);
 }
 
 // ─── Duration Picker ──────────────────────────────────────────────────────────
@@ -122,7 +130,7 @@ function TopConsumers({ connections }: { connections: ConnectionEntry[] }) {
   const refresh = useCallback(() => setFilter(f => ({ ...f, rev: f.rev + 1 })), []);
 
   const rows = useMemo(() => {
-    const filtered = filterConnections(connections, filter);
+    const filtered = filterConsumers(connections, filter);
     const map = new Map<string, { apiKey: string; sslCn: string; count: number }>();
     for (const c of filtered) {
       const key = c.apiKey || '(no key)';
@@ -233,7 +241,7 @@ function TopApis({ connections }: { connections: ConnectionEntry[] }) {
   const refresh = useCallback(() => setFilter(f => ({ ...f, rev: f.rev + 1 })), []);
 
   const rows = useMemo(() => {
-    const filtered = filterConnections(connections, filter);
+    const filtered = filterApis(connections, filter);
     const map = new Map<string, number>();
     for (const c of filtered) {
       const url = c.httpUrl || '(unknown)';

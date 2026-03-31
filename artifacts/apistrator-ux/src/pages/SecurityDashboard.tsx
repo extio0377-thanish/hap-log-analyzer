@@ -261,8 +261,16 @@ export default function SecurityDashboard() {
   const [showSshModal, setShowSshModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [globalSshPort, setGlobalSshPort] = useState<number | null>(null);
   const { toast } = useToast();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const loadSshConfig = useCallback(async () => {
+    try {
+      const cfg = await apiGet<Record<string, unknown>>('/security/ssh-config');
+      setGlobalSshPort(cfg.ssh_port ? Number(cfg.ssh_port) : null);
+    } catch {}
+  }, []);
 
   const loadServers = useCallback(async () => {
     try {
@@ -313,7 +321,7 @@ export default function SecurityDashboard() {
     }
   };
 
-  useEffect(() => { loadServers(); }, [loadServers]);
+  useEffect(() => { loadServers(); loadSshConfig(); }, [loadServers, loadSshConfig]);
 
   useEffect(() => {
     if (selectedIp) loadScan(selectedIp);
@@ -360,7 +368,7 @@ export default function SecurityDashboard() {
 
   return (
     <Layout>
-      {showSshModal && <SshConfigModal onClose={() => setShowSshModal(false)} onSaved={loadServers} />}
+      {showSshModal && <SshConfigModal onClose={() => setShowSshModal(false)} onSaved={() => { loadServers(); loadSshConfig(); }} />}
       {showAddModal && <AddServerModal onClose={() => setShowAddModal(false)} onAdded={loadServers} />}
 
       <div className="max-w-screen-2xl mx-auto space-y-5">
@@ -406,7 +414,7 @@ export default function SecurityDashboard() {
                   className="flex items-center gap-2 px-3 py-2">
                   <Server size={13} />
                   <span className="font-mono">{s.ip}</span>
-                  <span className="text-xs text-muted-foreground">:{s.port}</span>
+                  <span className="text-xs text-muted-foreground">:{globalSshPort ?? s.port}</span>
                   <span className={`w-2 h-2 rounded-full ${dotColor}`} />
                 </button>
                 <button
