@@ -11,6 +11,7 @@ import { formatBytes } from '@/lib/utils';
 import { useTheme } from '@/lib/theme-context';
 import { InlineSpinner } from './Spinner';
 import { apiRequest } from '@/lib/api-client';
+import { TopStats } from './TopStats';
 
 interface DashboardViewProps {
   report: LogReport;
@@ -182,6 +183,7 @@ export function DashboardView({
       {/* Tables */}
       <div className="space-y-6">
         <BackendTable backends={report.backendStats} />
+        <TopStats connections={report.connections} />
         <ConnectionsTable connections={report.connections} onRefresh={onManualRefresh} />
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout } from '@/components/Layout';
-import { apiGet, apiPost, apiPut, API_BASE } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut, apiDelete, API_BASE } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -184,7 +184,7 @@ function AddServerModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
   const { toast } = useToast();
 
   const save = async () => {
-    if (!form.ip.trim()) return toast({ title: 'IP address is required', variant: 'destructive' });
+    if (!form.ip.trim()) { toast({ title: 'IP address is required', variant: 'destructive' }); return; }
     setSaving(true);
     try {
       await apiPost('/security/servers', { ip: form.ip.trim(), port: Number(form.port) || 22 });
