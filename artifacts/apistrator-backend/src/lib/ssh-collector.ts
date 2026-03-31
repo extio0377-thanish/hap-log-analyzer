@@ -108,7 +108,7 @@ def collect_auth_events():
     top_ips = []
     for line in run_lines(
         "grep 'Failed password' /var/log/secure 2>/dev/null | "
-        "awk '{for(i=1;i<=NF;i++) if($i==\"from\") print $(i+1)}' | "
+        "awk '{for(i=1;i<=NF;i++) if($i==\\\"from\\\") print $(i+1)}' | "
         "sort | uniq -c | sort -rn | head -10"
     ):
         parts = line.split()
@@ -184,7 +184,7 @@ def collect_infra_changes():
         "config_changes":  config_changes[:20],
         "cron_activity":   [l[-200:] for l in cron_activity[-8:]],
         "kernel_version":  run("uname -r"),
-        "os_release":      run("grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d'=' -f2 | tr -d '\"'"),
+        "os_release":      run("grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d'=' -f2 | tr -d '\\\"'"),
         "last_boot":       run("who -b 2>/dev/null | awk '{print $3, $4}'"),
         "uptime":          run("uptime -p 2>/dev/null"),
     }
