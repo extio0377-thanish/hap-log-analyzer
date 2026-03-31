@@ -9,7 +9,7 @@ import {
 import {
   ShieldAlert, RefreshCw, Settings2, Server, Wifi, WifiOff,
   Users, Lock, AlertTriangle, CheckCircle2, XCircle, Clock,
-  Activity, Terminal, Package, FileText, Eye,
+  Activity, Terminal, Package, FileText, Eye, Plus, Trash2,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -177,6 +177,62 @@ function SshConfigModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
   );
 }
 
+// ─── Add Server Modal ─────────────────────────────────────────────────────────
+function AddServerModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const [form, setForm] = useState({ ip: '', port: '22' });
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const save = async () => {
+    if (!form.ip.trim()) return toast({ title: 'IP address is required', variant: 'destructive' });
+    setSaving(true);
+    try {
+      await apiPost('/security/servers', { ip: form.ip.trim(), port: Number(form.port) || 22 });
+      toast({ title: `Host ${form.ip} added` });
+      onAdded();
+      onClose();
+    } catch (e: unknown) {
+      toast({ title: 'Failed to add host', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-sm p-6">
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Plus size={18} />Add Host</h2>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground">IP Address or Hostname</label>
+            <input
+              className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono"
+              placeholder="10.0.1.40"
+              value={form.ip}
+              onChange={e => setForm(f => ({ ...f, ip: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && save()}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">SSH Port</label>
+            <input
+              type="number"
+              className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm"
+              value={form.port}
+              onChange={e => setForm(f => ({ ...f, port: e.target.value }))}
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 mt-5 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-md text-sm border border-border hover:bg-accent">Cancel</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground disabled:opacity-50">
+            {saving ? 'Adding…' : 'Add Host'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Summary Card ─────────────────────────────────────────────────────────────
 function SummaryCard({ icon, label, value, ok }: { icon: React.ReactNode; label: string; value: string | number; ok?: boolean }) {
   return (
@@ -203,6 +259,7 @@ export default function SecurityDashboard() {
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showSshModal, setShowSshModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const { toast } = useToast();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -232,6 +289,19 @@ export default function SecurityDashboard() {
       setScan(null);
     } finally { setLoading(false); }
   }, [toast]);
+
+  const removeServer = async (ip: string) => {
+    if (!confirm(`Remove ${ip} from monitoring?`)) return;
+    try {
+      await apiDelete(`/security/servers/${encodeURIComponent(ip)}`);
+      toast({ title: `${ip} removed` });
+      if (selectedIp === ip) setSelectedIp(null);
+      setScan(null);
+      loadServers();
+    } catch (e: unknown) {
+      toast({ title: 'Remove failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    }
+  };
 
   const triggerScan = async (ip: string) => {
     try {
@@ -291,6 +361,7 @@ export default function SecurityDashboard() {
   return (
     <Layout>
       {showSshModal && <SshConfigModal onClose={() => setShowSshModal(false)} onSaved={loadServers} />}
+      {showAddModal && <AddServerModal onClose={() => setShowAddModal(false)} onAdded={loadServers} />}
 
       <div className="max-w-screen-2xl mx-auto space-y-5">
         {/* Header */}
@@ -316,26 +387,43 @@ export default function SecurityDashboard() {
         </div>
 
         {/* Server Selector */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           {servers.map(s => {
-            const statusColor = s.last_scan_status === 'ok' ? 'border-green-500/50 text-green-400'
-              : s.last_scan_status === 'error' ? 'border-red-500/50 text-red-400'
-              : s.last_scan_status === 'scanning' ? 'border-yellow-500/50 text-yellow-400'
-              : 'border-border text-muted-foreground';
+            const statusColor = s.last_scan_status === 'ok' ? 'border-green-500/50'
+              : s.last_scan_status === 'error' ? 'border-red-500/50'
+              : s.last_scan_status === 'scanning' ? 'border-yellow-500/50'
+              : 'border-border';
+            const dotColor = s.last_scan_status === 'ok' ? 'bg-green-500'
+              : s.last_scan_status === 'error' ? 'bg-red-500'
+              : s.last_scan_status === 'scanning' ? 'bg-yellow-500 animate-pulse'
+              : 'bg-gray-500';
             const isSelected = selectedIp === s.ip;
             return (
-              <button key={s.ip} onClick={() => setSelectedIp(s.ip)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-all
-                  ${isSelected ? 'bg-primary/10 border-primary text-primary' : `bg-card hover:bg-accent ${statusColor}`}`}>
-                <Server size={14} />
-                <span>{s.ip}</span>
-                {s.last_scan_status === 'ok' && <span className="w-2 h-2 rounded-full bg-green-500" />}
-                {s.last_scan_status === 'error' && <span className="w-2 h-2 rounded-full bg-red-500" />}
-                {s.last_scan_status === 'scanning' && <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />}
-                {(s.last_scan_status === 'pending' || s.last_scan_status === 'unconfigured') && <span className="w-2 h-2 rounded-full bg-gray-500" />}
-              </button>
+              <div key={s.ip}
+                className={`flex items-center rounded-lg border text-sm font-medium transition-all overflow-hidden
+                  ${isSelected ? 'bg-primary/10 border-primary' : `bg-card ${statusColor}`}`}>
+                <button onClick={() => setSelectedIp(s.ip)}
+                  className="flex items-center gap-2 px-3 py-2">
+                  <Server size={13} />
+                  <span className="font-mono">{s.ip}</span>
+                  <span className="text-xs text-muted-foreground">:{s.port}</span>
+                  <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); removeServer(s.ip); }}
+                  title="Remove host"
+                  className="px-2 py-2 hover:bg-red-950/40 hover:text-red-400 text-muted-foreground/50 transition-colors border-l border-border">
+                  <Trash2 size={12} />
+                </button>
+              </div>
             );
           })}
+
+          <button onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-border text-sm hover:bg-accent text-muted-foreground">
+            <Plus size={14} /> Add Host
+          </button>
+
           {selectedIp && (
             <button onClick={() => triggerScan(selectedIp)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm hover:bg-accent text-muted-foreground">

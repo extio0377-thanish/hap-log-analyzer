@@ -22,7 +22,7 @@ async function runScanForServer(ip: string, port: number): Promise<void> {
   try {
     const data = await collectFromServer({
       host: ip,
-      port,
+      port: cfg.ssh_port || port,
       username: cfg.ssh_user || 'root',
       password: cfg.ssh_pass ?? undefined,
       privateKey: cfg.ssh_key ?? undefined,
