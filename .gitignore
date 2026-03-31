@@ -51,3 +51,7 @@ Thumbs.db
 # Sample/uploaded log files — do not commit real log data
 attached_assets/
 *.log
+
+# SQLite runtime files — never commit these
+*.db-shm
+*.db-wal
