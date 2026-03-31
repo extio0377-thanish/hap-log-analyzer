@@ -50,7 +50,6 @@ async function buildAll() {
       "utf-8-validate",
       "ssh2",
       "cpu-features",
-      "node-cron",
       "dtrace-provider",
       "isolated-vm",
       "lightningcss",
