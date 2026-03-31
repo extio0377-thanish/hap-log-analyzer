@@ -8,6 +8,7 @@ import usersRouter from "./users";
 import rolesRouter from "./roles";
 import passwordPolicyRouter from "./password-policy-route";
 import profileRouter from "./profile";
+import securityRouter from "./security";
 import { requireAuth } from "../lib/auth-middleware";
 
 const router: IRouter = Router();
@@ -24,5 +25,6 @@ router.use("/users", usersRouter);
 router.use("/roles", rolesRouter);
 router.use("/password-policy", passwordPolicyRouter);
 router.use("/profile", profileRouter);
+router.use("/security", securityRouter);
 
 export default router;

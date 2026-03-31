@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/auth-context';
-import { LayoutDashboard, Users, ShieldCheck, LogOut, User, ChevronDown, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldCheck, LogOut, User, ChevronDown, Settings, ShieldAlert } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -12,6 +12,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: '/', icon: <LayoutDashboard size={16} /> },
+  { label: 'Security Events', path: '/security', icon: <ShieldAlert size={16} /> },
   { label: 'Users & Roles', path: '/users', icon: <Users size={16} />, permission: 'manage_users' },
   { label: 'Password Policy', path: '/password-policy', icon: <ShieldCheck size={16} />, permission: 'manage_policy' },
 ];
