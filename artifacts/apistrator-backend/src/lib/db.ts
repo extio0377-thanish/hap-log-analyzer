@@ -61,6 +61,8 @@ function seedDefaultData() {
     { name: 'manage_users', description: 'Create, update, delete users' },
     { name: 'manage_roles', description: 'Create, update, delete roles' },
     { name: 'manage_policy', description: 'Manage password policy' },
+    { name: 'view_metrics', description: 'View server metrics dashboard' },
+    { name: 'manage_metrics', description: 'Add and remove metrics hosts' },
   ];
   for (const p of perms) {
     db.prepare(`INSERT OR IGNORE INTO permissions (name, description) VALUES (?, ?)`).run(p.name, p.description);
@@ -75,6 +77,10 @@ function seedDefaultData() {
   const viewPerm = db.prepare(`SELECT id FROM permissions WHERE name = ?`).get('view_dashboard') as { id: number };
   if (viewerRole && viewPerm) {
     db.prepare(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)`).run(viewerRole.id, viewPerm.id);
+  }
+  const viewMetricsPerm = db.prepare(`SELECT id FROM permissions WHERE name = ?`).get('view_metrics') as { id: number } | undefined;
+  if (viewerRole && viewMetricsPerm) {
+    db.prepare(`INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)`).run(viewerRole.id, viewMetricsPerm.id);
   }
 
   db.prepare(`INSERT OR IGNORE INTO password_policy (id, min_length, min_uppercase, min_lowercase, min_special) VALUES (1, 8, 1, 1, 1)`).run();

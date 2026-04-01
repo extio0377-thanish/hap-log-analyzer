@@ -14,6 +14,7 @@ import PasswordPolicyPage from "@/pages/PasswordPolicyPage";
 import ProfilePage from "@/pages/ProfilePage";
 import LogConfigPage from "@/pages/LogConfigPage";
 import SecurityDashboard from "@/pages/SecurityDashboard";
+import ServerMetricsDashboard from "@/pages/ServerMetricsDashboard";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -46,6 +47,7 @@ function Router() {
       <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />
       <Route path="/log-config" component={() => <ProtectedRoute component={LogConfigPage} />} />
       <Route path="/security" component={() => <ProtectedRoute component={SecurityDashboard} />} />
+      <Route path="/metrics" component={() => <ProtectedRoute component={ServerMetricsDashboard} permission="view_metrics" />} />
       <Route path="/" component={() => <ProtectedRoute component={Home} />} />
       <Route component={NotFound} />
     </Switch>
