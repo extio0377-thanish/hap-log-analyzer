@@ -645,7 +645,9 @@ export default function ServerMetricsDashboard() {
     return () => es.close();
   }, [loadLatest]);
 
-  const allMounts = [...new Set(rows.flatMap(r => r.disks.map(d => d.mount)))].sort();
+  const SKIP_PREFIXES = ['/boot', '/run', '/dev', '/proc', '/sys', '/snap', '/var/lib/docker', '/var/lib/lxc'];
+  const skipMount = (m: string) => SKIP_PREFIXES.some(p => m === p || m.startsWith(p + '/'));
+  const allMounts = [...new Set(rows.flatMap(r => r.disks.filter(d => !skipMount(d.mount)).map(d => d.mount)))].sort();
 
   const withData = rows.filter(r => r.cpu_usage !== null);
   const avgCpu = withData.reduce((s, r) => s + (r.cpu_usage ?? 0), 0) / (withData.length || 1);

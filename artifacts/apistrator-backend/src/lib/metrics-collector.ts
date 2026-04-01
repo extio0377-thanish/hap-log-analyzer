@@ -46,6 +46,8 @@ except Exception:
     mem = 0.0
 
 # Disk usage via df -P (POSIX format, no line wrapping)
+# Skip pseudo/system/boot filesystems — only real data partitions
+SKIP_PREFIXES = ('/boot', '/run', '/dev', '/proc', '/sys', '/snap', '/var/lib/docker', '/var/lib/lxc')
 disks = []
 try:
     out = subprocess.run(['df', '-P'], capture_output=True, text=True).stdout
@@ -54,7 +56,8 @@ try:
         if len(p) >= 6:
             mount = p[5]
             pct_str = p[4].rstrip('%')
-            if mount.startswith('/') and pct_str.isdigit():
+            if (mount.startswith('/') and pct_str.isdigit()
+                    and not any(mount == s or mount.startswith(s + '/') for s in SKIP_PREFIXES)):
                 disks.append({'mount': mount, 'used_pct': int(pct_str)})
 except Exception:
     pass
