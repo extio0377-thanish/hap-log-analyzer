@@ -60,6 +60,15 @@ CSS custom property `--primary` overridden via `html.theme-<name>` class:
 - Dark/light mode independent of color theme
 - User preference stored in `localStorage` as `msb-color-theme` and synced to DB via `PUT /api/profile/theme`
 
+## Permissions
+
+- `view_dashboard` — view traffic dashboard
+- `manage_users` — user CRUD
+- `manage_roles` — role CRUD
+- `manage_policy` — password policy
+- `view_metrics` — view Server Metrics dashboard (Viewer + Admin)
+- `manage_metrics` — add/remove metrics hosts (Admin only)
+
 ## Artifacts
 
 ### `artifacts/haproxy-analyzer` (`@workspace/haproxy-analyzer`)
@@ -72,6 +81,35 @@ React + Vite frontend. Features:
 - Color theme picker (Red/Blue/Green/Orange/Pink/Default) per user profile
 - "Thinking..." spinner on all loading states
 - Screenshot capture → download JPG + POST to `/api/screenshot`
+
+### `artifacts/apistrator-ux` (`@workspace/apistrator-ux`)
+
+React + Vite frontend (port 18118). Pages:
+- `/` — HAProxy log dashboard (TopStats + BackendTable)
+- `/security` — Security Events dashboard (SSH-collected RHEL host data via cron)
+- `/metrics` — **Server Metrics** dashboard: heatmap table (CPU/Mem/Disk%) + bar + line history charts; powered by `GET /api/metrics/*`
+- `/users`, `/password-policy`, `/profile`, `/log-config` — admin pages
+
+Nav visible per-permission. `view_metrics` shown to Viewer and Admin. `manage_metrics` (Add/Remove hosts) shown to Admin only.
+
+### `artifacts/apistrator-backend` (`@workspace/apistrator-backend`)
+
+Express 5 API (port 8080). Key routes:
+- `POST /api/auth/login`, `GET /api/auth/me`
+- `GET|POST|PUT|DELETE /api/users`, `/api/roles`, `/api/password-policy`, `/api/profile`
+- `GET|POST /api/security/*` — SSH-scanned RHEL security events; SSE stream
+- `GET /api/metrics/servers`, `POST /api/metrics/servers`, `DELETE /api/metrics/servers/:ip`
+- `GET /api/metrics/latest` — latest CPU/mem/disk per server (heatmap source)
+- `GET /api/metrics/history/:ip` — up to 120 scans per host
+- `POST /api/metrics/trigger/:ip` — on-demand collection
+- `GET /api/metrics/stream` — SSE live push (also accepts `?token=` for EventSource)
+
+Key lib files:
+- `src/lib/db.ts` — SQLite setup, permissions seeding
+- `src/lib/metrics-db.ts` — `metrics_servers` + `metrics_scans` tables
+- `src/lib/metrics-collector.ts` — SSH Python script for CPU/mem/disk collection
+- `src/lib/metrics-scheduler.ts` — 5-min interval + SSE event bus (`metricsBus`)
+- `src/lib/security-db.ts` — SSH config shared by security + metrics schedulers
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 
