@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import {
   LayoutDashboard, LogOut, User, ChevronDown, Settings,
-  ShieldAlert, Server, Sun, Moon, Lock,
+  ShieldAlert, Server, Sun, Moon, Lock, Database,
 } from 'lucide-react';
 
 interface NavItem {
@@ -15,9 +15,10 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard',      path: '/',         icon: <LayoutDashboard size={16} /> },
-  { label: 'Security Events', path: '/security', icon: <ShieldAlert size={16} /> },
-  { label: 'Server Metrics', path: '/metrics',  icon: <Server size={16} />, permission: 'view_metrics' },
+  { label: 'Dashboard',       path: '/',         icon: <LayoutDashboard size={16} /> },
+  { label: 'Security Events', path: '/security', icon: <ShieldAlert size={16} />, permission: 'view_security' },
+  { label: 'Server Metrics',  path: '/metrics',  icon: <Server size={16} />,      permission: 'view_metrics' },
+  { label: 'Storage Health',  path: '/storage',  icon: <Database size={16} />,    permission: 'view_storage' },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

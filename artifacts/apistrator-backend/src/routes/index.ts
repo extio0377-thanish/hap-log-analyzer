@@ -10,6 +10,7 @@ import passwordPolicyRouter from "./password-policy-route";
 import profileRouter from "./profile";
 import securityRouter from "./security";
 import metricsRouter from "./metrics";
+import storageRouter from "./storage";
 import { requireAuth } from "../lib/auth-middleware";
 
 const router: IRouter = Router();
@@ -28,5 +29,6 @@ router.use("/password-policy", passwordPolicyRouter);
 router.use("/profile", profileRouter);
 router.use("/security", securityRouter);
 router.use("/metrics", metricsRouter);
+router.use("/storage", storageRouter);
 
 export default router;

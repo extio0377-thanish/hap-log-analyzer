@@ -16,6 +16,7 @@ import LogConfigPage from "@/pages/LogConfigPage";
 import SecurityDashboard from "@/pages/SecurityDashboard";
 import ServerMetricsDashboard from "@/pages/ServerMetricsDashboard";
 import SecurityConfigPage from "@/pages/SecurityConfigPage";
+import StorageHealthDashboard from "@/pages/StorageHealthDashboard";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -47,9 +48,10 @@ function Router() {
       <Route path="/password-policy" component={() => <ProtectedRoute component={PasswordPolicyPage} permission="manage_policy" />} />
       <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />
       <Route path="/log-config" component={() => <ProtectedRoute component={LogConfigPage} />} />
-      <Route path="/security" component={() => <ProtectedRoute component={SecurityDashboard} />} />
+      <Route path="/security" component={() => <ProtectedRoute component={SecurityDashboard} permission="view_security" />} />
       <Route path="/metrics" component={() => <ProtectedRoute component={ServerMetricsDashboard} permission="view_metrics" />} />
       <Route path="/security-config" component={() => <ProtectedRoute component={SecurityConfigPage} permission="manage_users" />} />
+      <Route path="/storage" component={() => <ProtectedRoute component={StorageHealthDashboard} permission="view_storage" />} />
       <Route path="/" component={() => <ProtectedRoute component={Home} />} />
       <Route component={NotFound} />
     </Switch>
