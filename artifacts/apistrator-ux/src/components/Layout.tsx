@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/auth-context';
-import { LayoutDashboard, Users, ShieldCheck, LogOut, User, ChevronDown, Settings, ShieldAlert, Server } from 'lucide-react';
+import { useTheme } from '@/lib/theme-context';
+import {
+  LayoutDashboard, LogOut, User, ChevronDown, Settings,
+  ShieldAlert, Server, Sun, Moon, Lock,
+} from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -11,19 +15,19 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', path: '/', icon: <LayoutDashboard size={16} /> },
+  { label: 'Dashboard',      path: '/',         icon: <LayoutDashboard size={16} /> },
   { label: 'Security Events', path: '/security', icon: <ShieldAlert size={16} /> },
-  { label: 'Server Metrics', path: '/metrics', icon: <Server size={16} />, permission: 'view_metrics' },
-  { label: 'Users & Roles', path: '/users', icon: <Users size={16} />, permission: 'manage_users' },
-  { label: 'Password Policy', path: '/password-policy', icon: <ShieldCheck size={16} />, permission: 'manage_policy' },
+  { label: 'Server Metrics', path: '/metrics',  icon: <Server size={16} />, permission: 'view_metrics' },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout, hasPermission } = useAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const visibleNav = NAV_ITEMS.filter(n => !n.permission || hasPermission(n.permission));
+  const canManageUsers = hasPermission('manage_users') || hasPermission('manage_roles') || hasPermission('manage_policy');
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -51,7 +55,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="relative ml-auto">
+          {/* Dark / Light toggle */}
+          <button
+            onClick={toggleDarkMode}
+            title={darkMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
+          >
+            {darkMode === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
+          {/* User dropdown */}
+          <div className="relative">
             <button
               onClick={() => setMenuOpen(o => !o)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm hover:bg-accent transition-colors"
@@ -72,18 +86,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                     <span className="inline-block mt-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{user?.role}</span>
                   </div>
+
                   <Link href="/profile">
                     <a className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
                        onClick={() => setMenuOpen(false)}>
                       <User size={14} /> My Profile
                     </a>
                   </Link>
+
                   <Link href="/log-config">
                     <a className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
                        onClick={() => setMenuOpen(false)}>
                       <Settings size={14} /> Log Configuration
                     </a>
                   </Link>
+
+                  {canManageUsers && (
+                    <Link href="/security-config">
+                      <a className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
+                         onClick={() => setMenuOpen(false)}>
+                        <Lock size={14} /> Security Configuration
+                      </a>
+                    </Link>
+                  )}
+
                   <div className="border-t border-border mt-1">
                     <button
                       onClick={() => { setMenuOpen(false); logout(); }}

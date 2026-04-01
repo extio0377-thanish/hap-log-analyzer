@@ -645,7 +645,7 @@ export default function ServerMetricsDashboard() {
     return () => es.close();
   }, [loadLatest]);
 
-  const SKIP_PREFIXES = ['/boot', '/run', '/dev', '/proc', '/sys', '/snap', '/var/lib/docker', '/var/lib/lxc'];
+  const SKIP_PREFIXES = ['/boot', '/run', '/dev', '/proc', '/sys', '/snap'];
   const skipMount = (m: string) => SKIP_PREFIXES.some(p => m === p || m.startsWith(p + '/'));
   const allMounts = [...new Set(rows.flatMap(r => r.disks.filter(d => !skipMount(d.mount)).map(d => d.mount)))].sort();
 

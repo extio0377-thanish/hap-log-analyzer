@@ -47,7 +47,7 @@ except Exception:
 
 # Disk usage via df -P (POSIX format, no line wrapping)
 # Skip pseudo/system/boot filesystems — only real data partitions
-SKIP_PREFIXES = ('/boot', '/run', '/dev', '/proc', '/sys', '/snap', '/var/lib/docker', '/var/lib/lxc')
+SKIP_PREFIXES = ('/boot', '/run', '/dev', '/proc', '/sys', '/snap')
 disks = []
 try:
     out = subprocess.run(['df', '-P'], capture_output=True, text=True).stdout

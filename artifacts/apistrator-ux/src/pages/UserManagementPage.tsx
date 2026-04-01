@@ -22,7 +22,7 @@ function ModalOverlay({ onClose, children }: { onClose: () => void; children: Re
   );
 }
 
-export default function UserManagementPage() {
+export function UserManagementContent() {
   const [tab, setTab] = useState<Tab>('users');
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<RoleRow[]>([]);
@@ -53,41 +53,39 @@ export default function UserManagementPage() {
   useEffect(() => { load(); }, []);
 
   return (
-    <Layout>
-      <div className="max-w-5xl mx-auto space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">Users & Roles</h1>
-          <button
-            onClick={() => tab === 'users' ? setUserModal('create') : setRoleModal('create')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            <Plus size={14} /> New {tab === 'users' ? 'User' : 'Role'}
-          </button>
-        </div>
-
-        <div className="flex gap-1 border-b border-border">
-          {(['users', 'roles'] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px transition-colors ${tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-              {t}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-16"><Spinner /></div>
-        ) : tab === 'users' ? (
-          <UsersTab users={users} roles={roles} onEdit={u => setUserModal(u)} onDelete={async id => {
-            if (!confirm('Delete this user?')) return;
-            await apiDelete(`/users/${id}`); load();
-          }} />
-        ) : (
-          <RolesTab roles={roles} onEdit={r => setRoleModal(r)} onDelete={async id => {
-            if (!confirm('Delete this role?')) return;
-            await apiDelete(`/roles/${id}`).catch(e => toast({ title: 'Error', description: e.message, variant: 'destructive' })); load();
-          }} />
-        )}
+    <div className="max-w-5xl mx-auto space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Users & Roles</h1>
+        <button
+          onClick={() => tab === 'users' ? setUserModal('create') : setRoleModal('create')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+        >
+          <Plus size={14} /> New {tab === 'users' ? 'User' : 'Role'}
+        </button>
       </div>
+
+      <div className="flex gap-1 border-b border-border">
+        {(['users', 'roles'] as Tab[]).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px transition-colors ${tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><Spinner /></div>
+      ) : tab === 'users' ? (
+        <UsersTab users={users} roles={roles} onEdit={u => setUserModal(u)} onDelete={async id => {
+          if (!confirm('Delete this user?')) return;
+          await apiDelete(`/users/${id}`); load();
+        }} />
+      ) : (
+        <RolesTab roles={roles} onEdit={r => setRoleModal(r)} onDelete={async id => {
+          if (!confirm('Delete this role?')) return;
+          await apiDelete(`/roles/${id}`).catch(e => toast({ title: 'Error', description: e.message, variant: 'destructive' })); load();
+        }} />
+      )}
 
       {userModal !== null && (
         <UserModal
@@ -121,8 +119,12 @@ export default function UserManagementPage() {
           }}
         />
       )}
-    </Layout>
+    </div>
   );
+}
+
+export default function UserManagementPage() {
+  return <Layout><UserManagementContent /></Layout>;
 }
 
 function UsersTab({ users, roles, onEdit, onDelete }: { users: UserRow[]; roles: RoleRow[]; onEdit: (u: UserRow) => void; onDelete: (id: number) => void; }) {
