@@ -47,6 +47,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sec_scans_server ON security_scans(server_ip, created_at DESC);
 `);
 
+// Safe migrations — ALTER TABLE ignores errors if column already exists
+for (const col of [
+  `ALTER TABLE security_ssh_config ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))`,
+]) {
+  try { db.exec(col); } catch {}
+}
+
 // Seed default servers
 const defaultServers = ['10.0.1.10', '10.0.1.20', '10.0.1.30'];
 for (const ip of defaultServers) {

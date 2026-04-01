@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout } from '@/components/Layout';
-import { apiGet, apiPost, apiDelete, API_BASE } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut, apiDelete, API_BASE } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -9,7 +9,8 @@ import {
 } from 'recharts';
 import {
   Server, Plus, Trash2, RefreshCw, Activity,
-  Cpu, MemoryStick, HardDrive, Clock, AlertTriangle, Settings2,
+  Cpu, HardDrive, Clock, AlertTriangle, KeyRound, Lock,
+  Pencil, MemoryStick,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -20,6 +21,10 @@ interface MetricsRow {
   ip: string;
   port: number;
   hostname: string;
+  ssh_user: string;
+  ssh_auth_type: string;
+  has_password: boolean;
+  has_key: boolean;
   last_scan_status: string;
   last_scan_at: string | null;
   last_error: string | null;
@@ -36,7 +41,16 @@ interface HistoryPoint {
   disks: DiskEntry[];
 }
 
+interface SshFormState {
+  ssh_user: string;
+  ssh_auth_type: 'password' | 'key';
+  ssh_pass: string;
+  ssh_key: string;
+}
+
 const getToken = () => { try { return localStorage.getItem('msb-token'); } catch { return null; } };
+
+const DEFAULT_SSH: SshFormState = { ssh_user: 'root', ssh_auth_type: 'password', ssh_pass: '', ssh_key: '' };
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -64,23 +78,82 @@ function statusDot(status: string) {
   if (status === 'ok')          return 'bg-green-500';
   if (status === 'scanning')    return 'bg-yellow-500 animate-pulse';
   if (status === 'error')       return 'bg-red-500';
-  if (status === 'unconfigured') return 'bg-gray-400';
-  return 'bg-gray-500';
+  return 'bg-gray-400';
+}
+
+// ─── SSH Config Fields (reusable) ────────────────────────────────────────────
+
+function SshFields({ form, onChange }: {
+  form: SshFormState;
+  onChange: (f: SshFormState) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-muted-foreground">SSH Username</label>
+          <input className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm"
+            value={form.ssh_user} placeholder="root"
+            onChange={e => onChange({ ...form, ssh_user: e.target.value })} />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Auth Type</label>
+          <select className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm"
+            value={form.ssh_auth_type}
+            onChange={e => onChange({ ...form, ssh_auth_type: e.target.value as 'password' | 'key' })}>
+            <option value="password">Password</option>
+            <option value="key">Private Key</option>
+          </select>
+        </div>
+      </div>
+      {form.ssh_auth_type === 'password' ? (
+        <div>
+          <label className="text-xs text-muted-foreground">Password</label>
+          <input type="password" className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm"
+            value={form.ssh_pass} placeholder="Enter password"
+            onChange={e => onChange({ ...form, ssh_pass: e.target.value })} />
+        </div>
+      ) : (
+        <div>
+          <label className="text-xs text-muted-foreground">Private Key (PEM)</label>
+          <textarea rows={5}
+            className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-xs font-mono resize-y"
+            value={form.ssh_key} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"
+            onChange={e => onChange({ ...form, ssh_key: e.target.value })} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Add Host Modal ───────────────────────────────────────────────────────────
 
 function AddHostModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [form, setForm] = useState({ ip: '', port: '22' });
+  const [ip, setIp] = useState('');
+  const [port, setPort] = useState('22');
+  const [ssh, setSsh] = useState<SshFormState>(DEFAULT_SSH);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   const save = async () => {
-    if (!form.ip.trim()) { toast({ title: 'IP address is required', variant: 'destructive' }); return; }
+    if (!ip.trim()) { toast({ title: 'IP address is required', variant: 'destructive' }); return; }
+    if (ssh.ssh_auth_type === 'password' && !ssh.ssh_pass) {
+      toast({ title: 'Password is required', variant: 'destructive' }); return;
+    }
+    if (ssh.ssh_auth_type === 'key' && !ssh.ssh_key.trim()) {
+      toast({ title: 'Private key is required', variant: 'destructive' }); return;
+    }
     setSaving(true);
     try {
-      await apiPost('/metrics/servers', { ip: form.ip.trim(), port: Number(form.port) || 22 });
-      toast({ title: `Host ${form.ip} added` });
+      await apiPost('/metrics/servers', {
+        ip: ip.trim(),
+        port: Number(port) || 22,
+        ssh_user: ssh.ssh_user || 'root',
+        ssh_auth_type: ssh.ssh_auth_type,
+        ssh_pass: ssh.ssh_auth_type === 'password' ? ssh.ssh_pass : '',
+        ssh_key: ssh.ssh_auth_type === 'key' ? ssh.ssh_key : '',
+      });
+      toast({ title: `Host ${ip.trim()} added` });
       onAdded();
       onClose();
     } catch (e: unknown) {
@@ -89,25 +162,32 @@ function AddHostModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-sm p-6">
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Server size={18} />Add Metrics Host</h2>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground">IP Address</label>
-            <input className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono"
-              placeholder="10.0.1.10" value={form.ip}
-              onChange={e => setForm(f => ({ ...f, ip: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && save()} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-base font-semibold flex items-center gap-2"><Server size={16} />Add Metrics Host</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+        </div>
+        <div className="px-6 py-4 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground">IP Address / Hostname</label>
+              <input className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm font-mono"
+                placeholder="10.0.1.10" value={ip}
+                onChange={e => setIp(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">SSH Port</label>
+              <input type="number" className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm"
+                value={port} onChange={e => setPort(e.target.value)} />
+            </div>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">SSH Port</label>
-            <input type="number" className="w-full mt-1 px-3 py-2 rounded-md bg-muted border border-border text-sm"
-              value={form.port} onChange={e => setForm(f => ({ ...f, port: e.target.value }))} />
+          <div className="border-t border-border pt-3">
+            <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">SSH Credentials</p>
+            <SshFields form={ssh} onChange={setSsh} />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-3">SSH credentials are shared with the Security Events config.</p>
-        <div className="flex gap-2 mt-4 justify-end">
+        <div className="flex gap-2 px-6 py-4 border-t border-border justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-md text-sm border border-border hover:bg-accent">Cancel</button>
           <button onClick={save} disabled={saving}
             className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground disabled:opacity-50">
@@ -119,13 +199,73 @@ function AddHostModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
   );
 }
 
+// ─── Edit SSH Modal ───────────────────────────────────────────────────────────
+
+function EditSshModal({ row, onClose, onSaved }: { row: MetricsRow; onClose: () => void; onSaved: () => void }) {
+  const [ssh, setSsh] = useState<SshFormState>({
+    ssh_user: row.ssh_user || 'root',
+    ssh_auth_type: (row.ssh_auth_type as 'password' | 'key') || 'password',
+    ssh_pass: '',
+    ssh_key: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await apiPut(`/metrics/servers/${row.ip}/ssh`, {
+        ssh_user: ssh.ssh_user || 'root',
+        ssh_auth_type: ssh.ssh_auth_type,
+        ssh_pass: ssh.ssh_auth_type === 'password' ? ssh.ssh_pass : '',
+        ssh_key: ssh.ssh_auth_type === 'key' ? ssh.ssh_key : '',
+      });
+      toast({ title: `SSH config updated for ${row.hostname || row.ip}` });
+      onSaved();
+      onClose();
+    } catch (e: unknown) {
+      toast({ title: 'Failed to save', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h2 className="text-base font-semibold flex items-center gap-2"><KeyRound size={16} />Edit SSH Credentials</h2>
+            <p className="text-xs text-muted-foreground mt-0.5 font-mono">{row.hostname !== row.ip ? row.hostname : ''} {row.ip}:{row.port}</p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+        </div>
+        <div className="px-6 py-4">
+          <p className="text-xs text-muted-foreground mb-3">
+            {row.has_password || row.has_key
+              ? `Current: ${row.ssh_auth_type === 'key' ? 'Private key' : 'Password'} auth as ${row.ssh_user}. Leave password/key blank to keep existing.`
+              : 'No credentials saved yet.'}
+          </p>
+          <SshFields form={ssh} onChange={setSsh} />
+        </div>
+        <div className="flex gap-2 px-6 py-4 border-t border-border justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-md text-sm border border-border hover:bg-accent">Cancel</button>
+          <button onClick={save} disabled={saving}
+            className="px-4 py-2 rounded-md text-sm bg-primary text-primary-foreground disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save Credentials'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Heatmap Table ────────────────────────────────────────────────────────────
 
-function HeatmapTable({ rows, allMounts, onRemove, onTrigger, canManage }: {
+function HeatmapTable({ rows, allMounts, onRemove, onTrigger, onEditSsh, canManage }: {
   rows: MetricsRow[];
   allMounts: string[];
   onRemove: (ip: string) => void;
   onTrigger: (ip: string) => void;
+  onEditSsh: (row: MetricsRow) => void;
   canManage: boolean;
 }) {
   if (rows.length === 0) {
@@ -144,14 +284,14 @@ function HeatmapTable({ rows, allMounts, onRemove, onTrigger, canManage }: {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              <th className="text-left px-3 py-2.5 font-medium text-muted-foreground sticky left-0 bg-muted/40 min-w-[160px]">Hostname</th>
-              <th className="text-center px-1 py-2.5 font-medium text-muted-foreground min-w-[90px]">CPU Usage</th>
-              <th className="text-center px-1 py-2.5 font-medium text-muted-foreground min-w-[90px]">Memory Usage</th>
+              <th className="text-left px-3 py-2.5 font-medium text-muted-foreground sticky left-0 bg-muted/40 min-w-[180px]">Host</th>
+              <th className="text-center px-1 py-2.5 font-medium text-muted-foreground min-w-[90px]">CPU</th>
+              <th className="text-center px-1 py-2.5 font-medium text-muted-foreground min-w-[90px]">Memory</th>
               {allMounts.map(m => (
                 <th key={m} className="text-center px-1 py-2.5 font-medium text-muted-foreground min-w-[70px]">{m}</th>
               ))}
-              <th className="text-center px-2 py-2.5 font-medium text-muted-foreground min-w-[90px]">Last Scan</th>
-              <th className="px-2 py-2.5 min-w-[70px]" />
+              <th className="text-center px-2 py-2.5 font-medium text-muted-foreground min-w-[80px]">Last Scan</th>
+              <th className="px-2 py-2.5 min-w-[90px]" />
             </tr>
           </thead>
           <tbody>
@@ -160,23 +300,34 @@ function HeatmapTable({ rows, allMounts, onRemove, onTrigger, canManage }: {
               const ago = row.last_scan_at
                 ? Math.round((Date.now() - new Date(row.last_scan_at).getTime()) / 60000)
                 : null;
+              const credOk = row.has_password || row.has_key;
               return (
                 <tr key={row.ip} className="border-b border-border/50 hover:bg-muted/10 transition-colors">
-                  <td className="px-3 py-1.5 sticky left-0 bg-card font-mono font-medium">
+                  <td className="px-3 py-1.5 sticky left-0 bg-card">
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot(row.last_scan_status)}`} />
                       <div>
-                        <div className="text-foreground">{row.hostname || row.ip}</div>
+                        <div className="font-medium text-foreground font-mono">{row.hostname || row.ip}</div>
                         {row.hostname && row.hostname !== row.ip && (
-                          <div className="text-muted-foreground text-[10px]">{row.ip}</div>
+                          <div className="text-muted-foreground text-[10px] font-mono">{row.ip}:{row.port}</div>
+                        )}
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {credOk ? (
+                            <span className="flex items-center gap-0.5 text-[10px] text-green-400">
+                              {row.ssh_auth_type === 'key' ? <KeyRound size={9} /> : <Lock size={9} />}
+                              {row.ssh_user}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-yellow-500">⚠ No credentials</span>
+                          )}
+                        </div>
+                        {row.last_error && (
+                          <div className="text-red-400 text-[10px] mt-0.5 max-w-[160px] truncate" title={row.last_error}>
+                            ⚠ {row.last_error}
+                          </div>
                         )}
                       </div>
                     </div>
-                    {row.last_error && (
-                      <div className="text-red-400 text-[10px] mt-0.5 max-w-[140px] truncate" title={row.last_error}>
-                        ⚠ {row.last_error}
-                      </div>
-                    )}
                   </td>
                   <UsageCell pct={row.cpu_usage} />
                   <UsageCell pct={row.mem_usage} />
@@ -188,15 +339,21 @@ function HeatmapTable({ rows, allMounts, onRemove, onTrigger, canManage }: {
                   </td>
                   <td className="px-2 py-1.5">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => onTrigger(row.ip)} title="Refresh now"
+                      <button onClick={() => onTrigger(row.ip)} title="Collect now"
                         className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
                         <RefreshCw size={11} />
                       </button>
                       {canManage && (
-                        <button onClick={() => onRemove(row.ip)} title="Remove host"
-                          className="p-1 rounded hover:bg-red-950/40 hover:text-red-400 text-muted-foreground/50 transition-colors">
-                          <Trash2 size={11} />
-                        </button>
+                        <>
+                          <button onClick={() => onEditSsh(row)} title="Edit SSH credentials"
+                            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                            <Pencil size={11} />
+                          </button>
+                          <button onClick={() => onRemove(row.ip)} title="Remove host"
+                            className="p-1 rounded hover:bg-red-950/40 hover:text-red-400 text-muted-foreground/50 transition-colors">
+                            <Trash2 size={11} />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -209,7 +366,7 @@ function HeatmapTable({ rows, allMounts, onRemove, onTrigger, canManage }: {
 
       {/* Legend */}
       <div className="px-3 py-2 border-t border-border flex flex-wrap gap-3 items-center text-[10px] text-muted-foreground">
-        <span className="font-medium">Usage legend:</span>
+        <span className="font-medium">Usage:</span>
         {[
           { label: '< 30%', bg: 'bg-green-900/80' },
           { label: '30–50%', bg: 'bg-green-800/80' },
@@ -239,12 +396,12 @@ function CpuMemChart({ rows }: { rows: MetricsRow[] }) {
       mem: r.mem_usage ?? 0,
     }));
 
-  if (data.length === 0) return <p className="text-center text-muted-foreground py-12">No data yet.</p>;
+  if (data.length === 0) return <p className="text-center text-muted-foreground py-12">No data yet — add hosts and wait for the first collection.</p>;
 
   return (
     <div className="bg-card border border-border rounded-xl p-4">
       <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-        <Cpu size={15} className="text-primary" />CPU & Memory Usage Across All Hosts
+        <Cpu size={15} className="text-primary" />CPU & Memory Across All Hosts
       </h3>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{ left: 0, right: 20, top: 4, bottom: 60 }}>
@@ -270,6 +427,12 @@ function CpuMemChart({ rows }: { rows: MetricsRow[] }) {
 function DiskChart({ rows, allMounts }: { rows: MetricsRow[]; allMounts: string[] }) {
   const [selectedMount, setSelectedMount] = useState<string>(allMounts[0] ?? '/');
 
+  useEffect(() => {
+    if (allMounts.length > 0 && !allMounts.includes(selectedMount)) {
+      setSelectedMount(allMounts[0]);
+    }
+  }, [allMounts, selectedMount]);
+
   const data = rows
     .map(r => {
       const d = r.disks.find(x => x.mount === selectedMount);
@@ -277,23 +440,19 @@ function DiskChart({ rows, allMounts }: { rows: MetricsRow[]; allMounts: string[
     })
     .filter(r => r.pct !== null);
 
-  const mounts = allMounts.length > 0 ? allMounts : ['/'];
-
   return (
     <div className="bg-card border border-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <HardDrive size={15} className="text-primary" />Disk Usage by Mount Point
         </h3>
-        <select
-          value={selectedMount}
-          onChange={e => setSelectedMount(e.target.value)}
+        <select value={selectedMount} onChange={e => setSelectedMount(e.target.value)}
           className="px-3 py-1.5 rounded-md bg-muted border border-border text-xs">
-          {mounts.map(m => <option key={m} value={m}>{m}</option>)}
+          {(allMounts.length > 0 ? allMounts : ['/']).map(m => <option key={m} value={m}>{m}</option>)}
         </select>
       </div>
       {data.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12">No data for {selectedMount}.</p>
+        <p className="text-center text-muted-foreground py-12">No disk data for {selectedMount}.</p>
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data} margin={{ left: 0, right: 20, top: 4, bottom: 60 }}>
@@ -305,7 +464,7 @@ function DiskChart({ rows, allMounts }: { rows: MetricsRow[]; allMounts: string[
               formatter={(v: number) => [`${v}%`, `${selectedMount} usage`]}
               labelFormatter={(_, payload) => payload?.[0]?.payload?.full ?? ''}
             />
-            <Bar dataKey="pct" fill="#22c55e" radius={[4, 4, 0, 0]} name="pct" maxBarSize={50}
+            <Bar dataKey="pct" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={50}
               label={{ position: 'top', fontSize: 10, formatter: (v: number) => `${v}%` }} />
           </BarChart>
         </ResponsiveContainer>
@@ -325,9 +484,7 @@ function HistoryChart({ rows }: { rows: MetricsRow[] }) {
     if (!selectedIp) return;
     setLoading(true);
     apiGet<HistoryPoint[]>(`/metrics/history/${selectedIp}?limit=60`)
-      .then(data => setHistory(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .then(setHistory).catch(() => {}).finally(() => setLoading(false));
   }, [selectedIp]);
 
   const chartData = history.map(h => ({
@@ -344,16 +501,11 @@ function HistoryChart({ rows }: { rows: MetricsRow[] }) {
         </h3>
         <select value={selectedIp} onChange={e => setSelectedIp(e.target.value)}
           className="px-3 py-1.5 rounded-md bg-muted border border-border text-xs">
-          {rows.map(r => (
-            <option key={r.ip} value={r.ip}>{r.hostname || r.ip}</option>
-          ))}
+          {rows.map(r => <option key={r.ip} value={r.ip}>{r.hostname || r.ip}</option>)}
         </select>
       </div>
-      {loading ? (
-        <p className="text-center text-muted-foreground py-12">Loading…</p>
-      ) : chartData.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12">No history data yet for this host.</p>
-      ) : (
+      {loading ? <p className="text-center text-muted-foreground py-12">Loading…</p> :
+       chartData.length === 0 ? <p className="text-center text-muted-foreground py-12">No history data yet.</p> : (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} margin={{ left: 0, right: 20, top: 4, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -373,8 +525,6 @@ function HistoryChart({ rows }: { rows: MetricsRow[] }) {
   );
 }
 
-// ─── Per-Server Disk History Chart ────────────────────────────────────────────
-
 function DiskHistoryChart({ rows }: { rows: MetricsRow[] }) {
   const [selectedIp, setSelectedIp] = useState<string>(rows[0]?.ip ?? '');
   const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -384,9 +534,7 @@ function DiskHistoryChart({ rows }: { rows: MetricsRow[] }) {
     if (!selectedIp) return;
     setLoading(true);
     apiGet<HistoryPoint[]>(`/metrics/history/${selectedIp}?limit=60`)
-      .then(data => setHistory(data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .then(setHistory).catch(() => {}).finally(() => setLoading(false));
   }, [selectedIp]);
 
   const mounts = [...new Set(history.flatMap(h => h.disks.map(d => d.mount)))].sort();
@@ -404,18 +552,15 @@ function DiskHistoryChart({ rows }: { rows: MetricsRow[] }) {
     <div className="bg-card border border-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h3 className="text-sm font-semibold flex items-center gap-2">
-          <HardDrive size={15} className="text-primary" />Disk Usage History per Mount
+          <HardDrive size={15} className="text-primary" />Disk History per Mount
         </h3>
         <select value={selectedIp} onChange={e => setSelectedIp(e.target.value)}
           className="px-3 py-1.5 rounded-md bg-muted border border-border text-xs">
           {rows.map(r => <option key={r.ip} value={r.ip}>{r.hostname || r.ip}</option>)}
         </select>
       </div>
-      {loading ? (
-        <p className="text-center text-muted-foreground py-12">Loading…</p>
-      ) : chartData.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12">No history data yet.</p>
-      ) : (
+      {loading ? <p className="text-center text-muted-foreground py-12">Loading…</p> :
+       chartData.length === 0 ? <p className="text-center text-muted-foreground py-12">No history data yet.</p> : (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} margin={{ left: 0, right: 20, top: 4, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -446,6 +591,7 @@ export default function ServerMetricsDashboard() {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState(0);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editSshRow, setEditSshRow] = useState<MetricsRow | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const { hasPermission } = useAuth();
   const { toast } = useToast();
@@ -482,17 +628,14 @@ export default function ServerMetricsDashboard() {
     }
   };
 
-  // Initial load
   useEffect(() => { loadLatest(); }, [loadLatest]);
 
-  // Auto-refresh every 5 minutes
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh) { if (intervalRef.current) clearInterval(intervalRef.current); return; }
     intervalRef.current = setInterval(loadLatest, 5 * 60_000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [autoRefresh, loadLatest]);
 
-  // SSE for live push updates
   useEffect(() => {
     const token = getToken();
     if (!token) return;
@@ -502,17 +645,18 @@ export default function ServerMetricsDashboard() {
     return () => es.close();
   }, [loadLatest]);
 
-  // Compute all mounts across all servers
   const allMounts = [...new Set(rows.flatMap(r => r.disks.map(d => d.mount)))].sort();
 
-  // Summary stats
-  const avgCpu = rows.filter(r => r.cpu_usage !== null).reduce((s, r) => s + (r.cpu_usage ?? 0), 0) / (rows.filter(r => r.cpu_usage !== null).length || 1);
+  const withData = rows.filter(r => r.cpu_usage !== null);
+  const avgCpu = withData.reduce((s, r) => s + (r.cpu_usage ?? 0), 0) / (withData.length || 1);
   const avgMem = rows.filter(r => r.mem_usage !== null).reduce((s, r) => s + (r.mem_usage ?? 0), 0) / (rows.filter(r => r.mem_usage !== null).length || 1);
   const highUsage = rows.filter(r => (r.cpu_usage ?? 0) > 75 || (r.mem_usage ?? 0) > 75).length;
+  const noCreds = rows.filter(r => !r.has_password && !r.has_key).length;
 
   return (
     <Layout>
       {showAddModal && <AddHostModal onClose={() => setShowAddModal(false)} onAdded={loadLatest} />}
+      {editSshRow && <EditSshModal row={editSshRow} onClose={() => setEditSshRow(null)} onSaved={loadLatest} />}
 
       <div className="max-w-screen-2xl mx-auto space-y-5">
         {/* Header */}
@@ -521,16 +665,16 @@ export default function ServerMetricsDashboard() {
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Server size={20} className="text-primary" />Server Metrics
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">SSH-collected CPU, memory and disk metrics — updated every 5 minutes</p>
+            <p className="text-xs text-muted-foreground mt-0.5">SSH-collected CPU, memory and disk — updated every 5 minutes</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => setAutoRefresh(v => !v)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs border transition-colors ${autoRefresh ? 'bg-primary/10 border-primary/40 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}`}>
-              <Clock size={12} />{autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
+              <Clock size={12} />{autoRefresh ? 'Auto ON' : 'Auto OFF'}
             </button>
             <button onClick={loadLatest} disabled={loading}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs border border-border hover:bg-accent text-muted-foreground disabled:opacity-50">
-              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />Refresh All
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />Refresh
             </button>
             {canManage && (
               <button onClick={() => setShowAddModal(true)}
@@ -545,10 +689,10 @@ export default function ServerMetricsDashboard() {
         {rows.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { icon: <Server size={16} />, label: 'Total Hosts', value: rows.length },
-              { icon: <Cpu size={16} />, label: 'Avg CPU', value: `${avgCpu.toFixed(1)}%` },
-              { icon: <MemoryStick size={16} />, label: 'Avg Memory', value: `${avgMem.toFixed(1)}%` },
-              { icon: <AlertTriangle size={16} />, label: 'High Usage (>75%)', value: highUsage, ok: highUsage === 0 ? true : false },
+              { icon: <Server size={16} />, label: 'Total Hosts', value: rows.length, ok: undefined },
+              { icon: <Cpu size={16} />, label: 'Avg CPU', value: `${avgCpu.toFixed(1)}%`, ok: undefined },
+              { icon: <MemoryStick size={16} />, label: 'Avg Memory', value: `${avgMem.toFixed(1)}%`, ok: undefined },
+              { icon: <AlertTriangle size={16} />, label: 'High Usage (>75%)', value: highUsage, ok: highUsage === 0 },
             ].map(({ icon, label, value, ok }) => (
               <div key={label} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${ok === false ? 'bg-red-900/30 text-red-400' : ok === true ? 'bg-green-900/30 text-green-400' : 'bg-primary/10 text-primary'}`}>
@@ -563,11 +707,11 @@ export default function ServerMetricsDashboard() {
           </div>
         )}
 
-        {/* SSH Config hint if no credentials */}
-        {rows.some(r => r.last_scan_status === 'unconfigured') && (
+        {/* No credentials warning */}
+        {noCreds > 0 && canManage && (
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-yellow-800/50 bg-yellow-950/20 text-yellow-300 text-sm">
-            <Settings2 size={15} />
-            SSH credentials not configured. Go to <strong>Security Events</strong> dashboard → SSH Config to set up credentials.
+            <KeyRound size={15} />
+            {noCreds} host{noCreds > 1 ? 's have' : ' has'} no SSH credentials. Click the <Pencil size={12} className="inline mx-1" /> edit button on each row to add them.
           </div>
         )}
 
@@ -583,20 +727,17 @@ export default function ServerMetricsDashboard() {
 
         {/* Tab content */}
         {tab === 0 && (
-          <HeatmapTable rows={rows} allMounts={allMounts} onRemove={removeHost} onTrigger={triggerScan} canManage={canManage} />
+          <HeatmapTable rows={rows} allMounts={allMounts} onRemove={removeHost}
+            onTrigger={triggerScan} onEditSsh={setEditSshRow} canManage={canManage} />
         )}
-
         {tab === 1 && <CpuMemChart rows={rows} />}
-
         {tab === 2 && <DiskChart rows={rows} allMounts={allMounts} />}
-
         {tab === 3 && rows.length > 0 && (
           <div className="space-y-4">
             <HistoryChart rows={rows} />
             <DiskHistoryChart rows={rows} />
           </div>
         )}
-
         {tab === 3 && rows.length === 0 && (
           <div className="bg-card border border-border rounded-xl p-10 text-center">
             <Server size={40} className="mx-auto text-muted-foreground mb-3" />

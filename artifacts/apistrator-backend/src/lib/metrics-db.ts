@@ -9,7 +9,11 @@ db.exec(`
     hostname TEXT,
     last_scan_at TEXT,
     last_scan_status TEXT DEFAULT 'pending',
-    last_error TEXT
+    last_error TEXT,
+    ssh_user TEXT DEFAULT 'root',
+    ssh_auth_type TEXT DEFAULT 'password',
+    ssh_pass TEXT,
+    ssh_key TEXT
   );
 
   CREATE TABLE IF NOT EXISTS metrics_scans (
@@ -27,6 +31,16 @@ db.exec(`
     ON metrics_scans(server_ip, created_at DESC);
 `);
 
+// Safe migrations for existing databases
+for (const stmt of [
+  `ALTER TABLE metrics_servers ADD COLUMN ssh_user TEXT DEFAULT 'root'`,
+  `ALTER TABLE metrics_servers ADD COLUMN ssh_auth_type TEXT DEFAULT 'password'`,
+  `ALTER TABLE metrics_servers ADD COLUMN ssh_pass TEXT`,
+  `ALTER TABLE metrics_servers ADD COLUMN ssh_key TEXT`,
+]) {
+  try { db.exec(stmt); } catch {}
+}
+
 export interface MetricsServer {
   id: number;
   ip: string;
@@ -36,6 +50,10 @@ export interface MetricsServer {
   last_scan_at: string | null;
   last_scan_status: string;
   last_error: string | null;
+  ssh_user: string | null;
+  ssh_auth_type: string | null;
+  ssh_pass: string | null;
+  ssh_key: string | null;
 }
 
 export interface MetricsScan {
@@ -58,8 +76,47 @@ export const metricsDb = {
     return db.prepare(`SELECT * FROM metrics_servers WHERE ip = ?`).get(ip) as MetricsServer | null;
   },
 
-  addServer(ip: string, port = 22): void {
-    db.prepare(`INSERT OR IGNORE INTO metrics_servers (ip, port) VALUES (?, ?)`).run(ip, port);
+  addServer(ip: string, port = 22, sshConfig?: {
+    ssh_user?: string;
+    ssh_auth_type?: string;
+    ssh_pass?: string;
+    ssh_key?: string;
+  }): void {
+    db.prepare(`
+      INSERT OR IGNORE INTO metrics_servers (ip, port, ssh_user, ssh_auth_type, ssh_pass, ssh_key)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      ip,
+      port,
+      sshConfig?.ssh_user ?? 'root',
+      sshConfig?.ssh_auth_type ?? 'password',
+      sshConfig?.ssh_pass ?? null,
+      sshConfig?.ssh_key ?? null,
+    );
+  },
+
+  updateServerSsh(ip: string, config: {
+    ssh_user?: string;
+    ssh_auth_type?: string;
+    ssh_pass?: string | null;
+    ssh_key?: string | null;
+  }): void {
+    const current = db.prepare(`SELECT * FROM metrics_servers WHERE ip = ?`).get(ip) as MetricsServer | null;
+    if (!current) return;
+    db.prepare(`
+      UPDATE metrics_servers SET
+        ssh_user = ?,
+        ssh_auth_type = ?,
+        ssh_pass = ?,
+        ssh_key = ?
+      WHERE ip = ?
+    `).run(
+      config.ssh_user ?? current.ssh_user ?? 'root',
+      config.ssh_auth_type ?? current.ssh_auth_type ?? 'password',
+      (config.ssh_pass !== undefined && config.ssh_pass !== '') ? config.ssh_pass : current.ssh_pass,
+      (config.ssh_key !== undefined && config.ssh_key !== '') ? config.ssh_key : current.ssh_key,
+      ip,
+    );
   },
 
   removeServer(ip: string): void {

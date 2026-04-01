@@ -5,16 +5,44 @@ import { requirePermission } from '../lib/auth-middleware';
 
 const router = Router();
 
-// ── GET /api/metrics/servers ─────────────────────────────────────────────────
+/** Strip raw credentials from a server row before sending to clients */
+function maskServer(s: ReturnType<typeof metricsDb.getServer>) {
+  if (!s) return null;
+  const { ssh_pass, ssh_key, ...rest } = s;
+  return {
+    ...rest,
+    has_password: !!ssh_pass,
+    has_key: !!ssh_key,
+  };
+}
+
+// ── GET /api/metrics/servers ──────────────────────────────────────────────────
 router.get('/servers', requirePermission('view_metrics'), (_req, res) => {
-  res.json(metricsDb.getServers());
+  res.json(metricsDb.getServers().map(maskServer));
 });
 
 // ── POST /api/metrics/servers ─────────────────────────────────────────────────
 router.post('/servers', requirePermission('manage_metrics'), (req, res) => {
-  const { ip, port } = req.body as { ip: string; port?: number };
+  const { ip, port, ssh_user, ssh_auth_type, ssh_pass, ssh_key } = req.body as Record<string, string>;
   if (!ip) return res.status(400).json({ error: 'ip is required' });
-  metricsDb.addServer(ip.trim(), Number(port) || 22);
+  metricsDb.addServer(ip.trim(), Number(port) || 22, {
+    ssh_user: ssh_user || 'root',
+    ssh_auth_type: ssh_auth_type || 'password',
+    ssh_pass: ssh_pass || null,
+    ssh_key: ssh_key || null,
+  });
+  res.json({ ok: true });
+});
+
+// ── PUT /api/metrics/servers/:ip/ssh ─────────────────────────────────────────
+router.put('/servers/:ip/ssh', requirePermission('manage_metrics'), (req, res) => {
+  const { ssh_user, ssh_auth_type, ssh_pass, ssh_key } = req.body as Record<string, string>;
+  metricsDb.updateServerSsh(req.params.ip, {
+    ssh_user: ssh_user || undefined,
+    ssh_auth_type: ssh_auth_type || undefined,
+    ssh_pass: ssh_pass || null,
+    ssh_key: ssh_key || null,
+  });
   res.json({ ok: true });
 });
 
@@ -25,13 +53,16 @@ router.delete('/servers/:ip', requirePermission('manage_metrics'), (req, res) =>
 });
 
 // ── GET /api/metrics/latest ───────────────────────────────────────────────────
-// Returns latest scan data for ALL servers (used by heatmap)
 router.get('/latest', requirePermission('view_metrics'), (_req, res) => {
   const all = metricsDb.getLatestForAll();
   const result = all.map(({ server, scan }) => ({
     ip: server.ip,
     port: server.port,
     hostname: scan?.hostname ?? server.hostname ?? server.ip,
+    ssh_user: server.ssh_user ?? 'root',
+    ssh_auth_type: server.ssh_auth_type ?? 'password',
+    has_password: !!server.ssh_pass,
+    has_key: !!server.ssh_key,
     last_scan_status: server.last_scan_status,
     last_scan_at: server.last_scan_at,
     last_error: server.last_error,
@@ -60,7 +91,7 @@ router.post('/trigger/:ip', requirePermission('view_metrics'), async (req, res) 
   try {
     res.json({ ok: true, message: 'Collection started' });
     await runSingleMetrics(req.params.ip);
-  } catch (e) {
+  } catch {
     // Already responded; error emitted via bus
   }
 });
@@ -82,7 +113,10 @@ router.get('/stream', requirePermission('view_metrics'), (req, res) => {
   metricsBus.on('metrics', onMetrics);
   metricsBus.on('metrics-error', onError);
 
+  const ping = setInterval(() => res.write(': ping\n\n'), 20000);
+
   req.on('close', () => {
+    clearInterval(ping);
     metricsBus.off('metrics', onMetrics);
     metricsBus.off('metrics-error', onError);
   });

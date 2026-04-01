@@ -1,5 +1,4 @@
 import { metricsDb } from './metrics-db';
-import { securityDb } from './security-db';
 import { collectMetrics } from './metrics-collector';
 import { logger } from './logger';
 import { EventEmitter } from 'node:events';
@@ -10,13 +9,21 @@ metricsBus.setMaxListeners(100);
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 
 async function runMetricsForServer(server: { ip: string; port: number }): Promise<void> {
-  const cfg = securityDb.getSshConfig();
-  if (!cfg.ssh_pass && !cfg.ssh_key) {
-    metricsDb.updateServerStatus(server.ip, 'unconfigured', null, 'No SSH credentials set — configure via SSH Config');
+  const full = metricsDb.getServer(server.ip);
+  if (!full) {
+    logger.warn({ ip: server.ip }, 'Metrics server not found in DB');
     return;
   }
 
-  const effectivePort = cfg.ssh_port || server.port;
+  const hasPassword = !!(full.ssh_pass);
+  const hasKey = !!(full.ssh_key);
+
+  if (!hasPassword && !hasKey) {
+    metricsDb.updateServerStatus(server.ip, 'unconfigured', null, 'No SSH credentials — click Edit SSH Config');
+    return;
+  }
+
+  const effectivePort = full.port;
   logger.info({ ip: server.ip, port: effectivePort }, 'Collecting server metrics');
   metricsDb.updateServerStatus(server.ip, 'scanning');
 
@@ -24,9 +31,9 @@ async function runMetricsForServer(server: { ip: string; port: number }): Promis
     const data = await collectMetrics({
       host: server.ip,
       port: effectivePort,
-      username: cfg.ssh_user || 'root',
-      password: cfg.ssh_pass ?? undefined,
-      privateKey: cfg.ssh_key ?? undefined,
+      username: full.ssh_user || 'root',
+      password: full.ssh_pass ?? undefined,
+      privateKey: full.ssh_key ?? undefined,
       timeoutMs: 25_000,
     });
 
@@ -56,7 +63,6 @@ export function runSingleMetrics(ip: string): Promise<void> {
 export function startMetricsScheduler(): void {
   if (schedulerInterval) clearInterval(schedulerInterval);
 
-  // Collect every 5 minutes
   schedulerInterval = setInterval(async () => {
     await runAllMetrics();
   }, 5 * 60_000);
